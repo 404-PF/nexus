@@ -165,6 +165,24 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
     return true;
   };
 
+  const launchProviderSwitcher = (): boolean => {
+    const result = spawnSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'setup', '--', '--provider'], {
+      stdio: 'inherit'
+    });
+
+    if (result.error) {
+      state.setError(`Failed to launch provider switcher: ${result.error.message}`);
+      return false;
+    }
+
+    if (result.status !== 0) {
+      state.setError(`Provider switcher exited with code ${result.status ?? 'unknown'}`);
+      return false;
+    }
+
+    return true;
+  };
+
   const reloadProvider = async (nextConfig: AppConfig): Promise<void> => {
     const nextProvider = await createProviderClient(nextConfig);
     const previousProvider = provider;
@@ -387,6 +405,18 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
           await refreshTools();
         }
         break;
+      case 'switch-provider-model':
+        if (state.getSnapshot().isBusy) {
+          state.setStatus('Finish the active turn before switching provider or model');
+          break;
+        }
+
+        state.setStatus('Switching provider or model');
+
+        if (launchProviderSwitcher()) {
+          await refreshTools();
+        }
+        break;
       case 'refresh-auth':
         await refreshAuth();
         break;
@@ -423,6 +453,11 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
         id: 'edit-config',
         label: 'Edit config',
         description: 'Open the configuration editor and reload settings after saving'
+      },
+      {
+        id: 'switch-provider-model',
+        label: 'Switch provider/model',
+        description: 'Change the active provider or model, then reload the live client and tools'
       },
       {
         id: 'refresh-auth',

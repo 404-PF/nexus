@@ -215,11 +215,11 @@ async function promptMcpServers(existingServers: McpServerConfig[]): Promise<Mcp
   return nextServers;
 }
 
-export async function runConfigWizard(seedConfig?: AppConfig): Promise<AppConfig> {
-  const defaults = seedConfig ?? createDefaultConfig();
-
-  console.clear();
-
+async function promptProviderSettings(defaults: AppConfig): Promise<{
+  provider: ProviderKind;
+  model: string;
+  baseUrl?: string;
+} | null> {
   const provider = await select({
     message: 'Select your primary provider',
     options: [
@@ -250,18 +250,6 @@ export async function runConfigWizard(seedConfig?: AppConfig): Promise<AppConfig
     process.exit(0);
   }
 
-  const systemPrompt = await text({
-    message: 'System prompt',
-    initialValue: defaults.systemPrompt
-  });
-
-  if (isCancel(systemPrompt)) {
-    cancel('Setup cancelled');
-    process.exit(0);
-  }
-
-  const nextSystemPrompt = systemPrompt.trim() || defaults.systemPrompt;
-
   let baseUrl: string | undefined;
   if (provider === 'openai-compatible') {
     const compatibleBaseUrl = await text({
@@ -278,7 +266,15 @@ export async function runConfigWizard(seedConfig?: AppConfig): Promise<AppConfig
     baseUrl = compatibleBaseUrl.trim() || undefined;
   }
 
-  const currentSecret = await resolveProviderSecret(provider as ProviderKind);
+  return {
+    provider: provider as ProviderKind,
+    model,
+    ...(baseUrl ? { baseUrl } : {})
+  };
+}
+
+async function promptProviderApiKey(provider: ProviderKind): Promise<void> {
+  const currentSecret = await resolveProviderSecret(provider);
   const saveApiKey = await confirm({
     message: 'Store an API key now?',
     initialValue: Boolean(currentSecret)
@@ -289,18 +285,65 @@ export async function runConfigWizard(seedConfig?: AppConfig): Promise<AppConfig
     process.exit(0);
   }
 
-  if (saveApiKey) {
-    const apiKey = await password({
-      message: 'API key'
-    });
-
-    if (isCancel(apiKey)) {
-      cancel('Setup cancelled');
-      process.exit(0);
-    }
-
-    await storeProviderApiKey(provider as ProviderKind, apiKey);
+  if (!saveApiKey) {
+    return;
   }
+
+  const apiKey = await password({
+    message: 'API key'
+  });
+
+  if (isCancel(apiKey)) {
+    cancel('Setup cancelled');
+    process.exit(0);
+  }
+
+  await storeProviderApiKey(provider, apiKey);
+}
+
+async function hasProviderSecret(provider: ProviderKind): Promise<boolean> {
+  return Boolean(await resolveProviderSecret(provider));
+}
+
+function applyProviderSelection(
+  defaults: AppConfig,
+  selection: { provider: ProviderKind; model: string; baseUrl?: string }
+): AppConfig {
+  return {
+    ...defaults,
+    provider: {
+      kind: selection.provider,
+      model: selection.model,
+      ...(selection.baseUrl ? { baseUrl: selection.baseUrl } : {}),
+      ...(defaults.provider.temperature !== undefined ? { temperature: defaults.provider.temperature } : {}),
+      ...(defaults.provider.maxTokens !== undefined ? { maxTokens: defaults.provider.maxTokens } : {})
+    }
+  };
+}
+
+export async function runConfigWizard(seedConfig?: AppConfig): Promise<AppConfig> {
+  const defaults = seedConfig ?? createDefaultConfig();
+
+  console.clear();
+
+  const providerSelection = await promptProviderSettings(defaults);
+  if (!providerSelection) {
+    cancel('Setup cancelled');
+    process.exit(0);
+  }
+
+  const systemPrompt = await text({
+    message: 'System prompt',
+    initialValue: defaults.systemPrompt
+  });
+
+  if (isCancel(systemPrompt)) {
+    cancel('Setup cancelled');
+    process.exit(0);
+  }
+
+  const nextSystemPrompt = systemPrompt.trim() || defaults.systemPrompt;
+  await promptProviderApiKey(providerSelection.provider);
 
   const availableNativeTools = Object.entries(nativeToolCatalog).map(([name, tool]) => ({
     value: name,
@@ -326,14 +369,7 @@ export async function runConfigWizard(seedConfig?: AppConfig): Promise<AppConfig
   }
 
   const config: AppConfig = {
-    ...defaults,
-    provider: {
-      kind: provider as ProviderKind,
-      model,
-      ...(baseUrl?.trim() ? { baseUrl: baseUrl.trim() } : {}),
-      ...(defaults.provider.temperature !== undefined ? { temperature: defaults.provider.temperature } : {}),
-      ...(defaults.provider.maxTokens !== undefined ? { maxTokens: defaults.provider.maxTokens } : {})
-    },
+    ...applyProviderSelection(defaults, providerSelection),
     systemPrompt: nextSystemPrompt,
     tools: {
       native: nativeTools as string[],
@@ -344,6 +380,30 @@ export async function runConfigWizard(seedConfig?: AppConfig): Promise<AppConfig
     }
   };
 
+  await saveConfig(config);
+
+  console.log('Saved config to ~/.agent/config.yaml');
+  return config;
+}
+
+export async function runProviderSwitcher(seedConfig?: AppConfig): Promise<AppConfig> {
+  const defaults = seedConfig ?? createDefaultConfig();
+
+  console.clear();
+
+  const providerSelection = await promptProviderSettings(defaults);
+  if (!providerSelection) {
+    cancel('Setup cancelled');
+    process.exit(0);
+  }
+
+  await promptProviderApiKey(providerSelection.provider);
+  if (!(await hasProviderSecret(providerSelection.provider))) {
+    cancel(`No API key available for ${getProviderDefinition(providerSelection.provider).label}`);
+    process.exit(1);
+  }
+
+  const config = applyProviderSelection(defaults, providerSelection);
   await saveConfig(config);
 
   console.log('Saved config to ~/.agent/config.yaml');
