@@ -1,6 +1,7 @@
-import { runConfigWizard } from './wizard.js';
+import { runConfigWizard, runProviderSwitcher } from './wizard.js';
 import { loadConfig } from './persistence.js';
 
+const argv = new Set(process.argv.slice(2));
 let existingConfig: Awaited<ReturnType<typeof loadConfig>> = null;
 
 try {
@@ -16,4 +17,12 @@ try {
 	}
 }
 
+if (argv.has('--provider') || argv.has('provider') || argv.has('switch-provider')) {
+  await runProviderSwitcher(existingConfig ?? undefined);
+  process.exit(0);
+}
+
 await runConfigWizard(existingConfig ?? undefined);
+process.exit(0);
+await runConfigWizard(existingConfig ?? undefined);
+process.exit(0);
