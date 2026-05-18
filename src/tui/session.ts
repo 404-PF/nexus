@@ -7,6 +7,7 @@ import { loadConfig } from '../config/persistence.js';
 import {
   archiveTranscript,
   clearTranscript,
+  exportTranscript,
   listTranscripts as loadSavedTranscripts,
   loadTranscript,
   loadTranscriptById,
@@ -61,7 +62,8 @@ export interface TuiCommand {
 }
 
 export enum CommandAction {
-  BrowseTranscripts = 'browse-transcripts'
+  BrowseTranscripts = 'browse-transcripts',
+  ExportTranscript = 'export-transcript'
 }
 
 export interface TuiSession {
@@ -71,6 +73,7 @@ export interface TuiSession {
   startNewChat(): Promise<void>;
   listTranscripts(): Promise<TranscriptSummary[]>;
   openTranscript(transcriptId: string): Promise<void>;
+  exportTranscript(filePath: string): Promise<void>;
   refreshAuth(): Promise<void>;
   refreshTools(): Promise<void>;
   clearConversation(): void;
@@ -328,6 +331,35 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
     }
   };
 
+  const exportCurrentTranscript = async (filePath: string): Promise<void> => {
+    if (state.getSnapshot().isBusy) {
+      state.setStatus('Finish the active turn before exporting a transcript');
+      return;
+    }
+
+    const trimmedPath = filePath.trim();
+    if (!trimmedPath) {
+      state.setStatus('Choose a file path to export the transcript');
+      return;
+    }
+
+    state.markBusy('Exporting transcript');
+
+    try {
+      await waitForTranscriptWrites();
+      await waitForTranscriptArchives();
+      await exportTranscript(state.getSnapshot().messages, trimmedPath);
+      state.markIdle(`Exported transcript to ${trimmedPath}`);
+    } catch (error) {
+      state.setError(`Failed to export transcript: ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
+    } finally {
+      if (state.getSnapshot().isBusy) {
+        state.markIdle();
+      }
+    }
+  };
+
   const listSavedTranscripts = async (): Promise<TranscriptSummary[]> => {
     await waitForTranscriptWrites();
     await waitForTranscriptArchives();
@@ -341,6 +373,8 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
         break;
       case 'browse-transcripts':
         return CommandAction.BrowseTranscripts;
+      case 'export-transcript':
+        return CommandAction.ExportTranscript;
       case 'edit-config':
         if (state.getSnapshot().isBusy) {
           state.setStatus('Finish the active turn before editing config');
@@ -381,6 +415,11 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
         description: 'View saved chats and reopen one without deleting it'
       },
       {
+        id: 'export-transcript',
+        label: 'Export transcript',
+        description: 'Write the current conversation to a file without clearing it'
+      },
+      {
         id: 'edit-config',
         label: 'Edit config',
         description: 'Open the configuration editor and reload settings after saving'
@@ -410,6 +449,7 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
     startNewChat,
     listTranscripts: listSavedTranscripts,
     openTranscript,
+    exportTranscript: exportCurrentTranscript,
     refreshAuth,
     refreshTools,
     clearConversation: () => state.clearConversation(),

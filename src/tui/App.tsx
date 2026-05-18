@@ -5,12 +5,18 @@ import type { TuiSession, TranscriptSummary } from './session.js';
 import { CommandAction } from './session.js';
 import { CommandPalette, InputLine, MessageList, McpInspectorPanel, StatusBar, TranscriptBrowser } from './StreamingRenderer.js';
 
+function createDefaultTranscriptExportName(): string {
+  return `transcript-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+}
+
 export function App({ session }: { session: TuiSession }): ReactElement {
   const { exit } = useApp();
   const subscribe = useMemo(() => session.state.subscribe.bind(session.state), [session.state]);
   const getSnapshot = useMemo(() => session.state.getSnapshot.bind(session.state), [session.state]);
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   const [draft, setDraft] = useState('');
+  const [exportDraft, setExportDraft] = useState('');
+  const [exportPromptOpen, setExportPromptOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteIndex, setPaletteIndex] = useState(0);
   const [transcriptBrowserOpen, setTranscriptBrowserOpen] = useState(false);
@@ -67,6 +73,48 @@ export function App({ session }: { session: TuiSession }): ReactElement {
   }, [transcriptBrowserIndex, transcripts.length]);
 
   useInput((input, key) => {
+    if (exportPromptOpen) {
+      if (key.ctrl && input === 'c') {
+        exit();
+        return;
+      }
+
+      if (key.escape) {
+        setExportPromptOpen(false);
+        setExportDraft('');
+        return;
+      }
+
+      if (key.return) {
+        const value = exportDraft.trim();
+        if (!value) {
+          return;
+        }
+
+        void (async () => {
+          try {
+            await session.exportTranscript(value);
+            setExportPromptOpen(false);
+            setExportDraft('');
+          } catch {
+            // The session already surfaced the failure.
+          }
+        })();
+        return;
+      }
+
+      if (key.backspace || key.delete) {
+        setExportDraft((value) => value.slice(0, -1));
+        return;
+      }
+
+      if (input) {
+        setExportDraft((value) => `${value}${input}`);
+      }
+
+      return;
+    }
+
     if (transcriptBrowserOpen) {
       if (key.ctrl && input === 'c') {
         exit();
@@ -127,6 +175,9 @@ export function App({ session }: { session: TuiSession }): ReactElement {
             const action = await session.executeCommand(selected.id);
             if (action === CommandAction.BrowseTranscripts) {
               setTranscriptBrowserOpen(true);
+            } else if (action === CommandAction.ExportTranscript) {
+              setExportDraft(createDefaultTranscriptExportName());
+              setExportPromptOpen(true);
             }
           })();
           if (selected.id === 'quit') {
@@ -186,7 +237,15 @@ export function App({ session }: { session: TuiSession }): ReactElement {
         error={snapshot.error}
       />
       <McpInspectorPanel inspector={snapshot.mcpInspector} />
-      <InputLine draft={draft} />
+      <InputLine
+        draft={exportPromptOpen ? exportDraft : draft}
+        prompt={exportPromptOpen ? 'Export transcript to: ' : '> '}
+        placeholder={
+          exportPromptOpen
+            ? 'transcript-2026-05-18T12-34-56.789Z.txt'
+            : 'Type a message. Ctrl+K opens the command palette.'
+        }
+      />
       {paletteOpen ? <CommandPalette commands={commands} selectedIndex={paletteIndex} /> : null}
       {transcriptBrowserOpen ? (
         <TranscriptBrowser

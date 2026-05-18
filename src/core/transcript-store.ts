@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 import { mkdir, readFile, readdir, stat, unlink, writeFile } from 'fs/promises';
-import { isAbsolute, join, relative, resolve } from 'path';
+import { dirname, isAbsolute, join, relative, resolve } from 'path';
 import YAML from 'yaml';
 import { z } from 'zod';
 import { agentHomeDir } from '../config/persistence.js';
@@ -99,6 +99,68 @@ function summarizeTranscript(messages: ChatMessage[]): string {
   }
 
   return preview.length > 72 ? `${preview.slice(0, 69)}...` : preview;
+}
+
+function stringifyToolArguments(value: unknown): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  try {
+    return JSON.stringify(value, null, 2) ?? 'null';
+  } catch {
+    return String(value);
+  }
+}
+
+function formatTranscriptExport(messages: ChatMessage[]): string {
+  const lines: string[] = [];
+
+  lines.push('Nexus transcript export');
+  lines.push(`Exported at: ${new Date().toISOString()}`);
+  lines.push(`Message count: ${messages.length}`);
+  lines.push('');
+
+  messages.forEach((message, index) => {
+    lines.push(`Message ${index + 1}`);
+    lines.push(`Role: ${message.role}`);
+
+    if (message.name) {
+      lines.push(`Name: ${message.name}`);
+    }
+
+    if (message.toolCallId) {
+      lines.push(`Tool call ID: ${message.toolCallId}`);
+    }
+
+    lines.push('Content:');
+    lines.push(message.content.length > 0 ? message.content : '(empty)');
+
+    if (message.toolCalls && message.toolCalls.length > 0) {
+      lines.push('Tool calls:');
+      for (const toolCall of message.toolCalls) {
+        lines.push(`- ${toolCall.name} (${toolCall.id})`);
+        lines.push('  Arguments:');
+
+        const serializedArguments = stringifyToolArguments(toolCall.arguments).split('\n');
+        for (const line of serializedArguments) {
+          lines.push(`    ${line}`);
+        }
+      }
+    }
+
+    lines.push('');
+    lines.push('---');
+    lines.push('');
+  });
+
+  return lines.join('\n');
+}
+
+export async function exportTranscript(messages: ChatMessage[], filePath: string): Promise<void> {
+  const outputPath = resolve(filePath);
+  await mkdir(dirname(outputPath), { recursive: true });
+  await writeFile(outputPath, formatTranscriptExport(messages), { encoding: 'utf8' });
 }
 
 function createArchiveFileName(): string {

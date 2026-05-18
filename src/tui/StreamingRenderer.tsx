@@ -115,11 +115,19 @@ export function McpInspectorPanel({ inspector }: { inspector: McpInspectorSnapsh
   );
 }
 
-export function InputLine({ draft }: { draft: string }): ReactElement {
+export function InputLine({
+  draft,
+  prompt,
+  placeholder
+}: {
+  draft: string;
+  prompt: string;
+  placeholder: string;
+}): ReactElement {
   return (
     <Box marginTop={1}>
-      <Text color="gray">&gt; </Text>
-      <Text>{draft || 'Type a message. Ctrl+K opens the command palette.'}</Text>
+      <Text color="gray">{prompt}</Text>
+      <Text>{draft || placeholder}</Text>
     </Box>
   );
 }
