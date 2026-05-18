@@ -334,13 +334,13 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
   const exportCurrentTranscript = async (filePath: string): Promise<void> => {
     if (state.getSnapshot().isBusy) {
       state.setStatus('Finish the active turn before exporting a transcript');
-      return;
+      throw new Error('Finish the active turn before exporting a transcript');
     }
 
     const trimmedPath = filePath.trim();
     if (!trimmedPath) {
       state.setStatus('Choose a file path to export the transcript');
-      return;
+      throw new Error('Choose a file path to export the transcript');
     }
 
     state.markBusy('Exporting transcript');
