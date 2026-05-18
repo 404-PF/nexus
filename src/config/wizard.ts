@@ -396,8 +396,16 @@ function applyProviderSelection(
       kind: selection.provider,
       model: selection.model,
       ...(selection.baseUrl ? { baseUrl: selection.baseUrl } : {}),
-      ...(selection.temperature !== undefined ? { temperature: selection.temperature } : {}),
-      ...(selection.maxTokens !== undefined ? { maxTokens: selection.maxTokens } : {})
+      ...(selection.temperature !== undefined
+        ? { temperature: selection.temperature }
+        : defaults.provider.temperature !== undefined
+          ? { temperature: defaults.provider.temperature }
+          : {}),
+      ...(selection.maxTokens !== undefined
+        ? { maxTokens: selection.maxTokens }
+        : defaults.provider.maxTokens !== undefined
+          ? { maxTokens: defaults.provider.maxTokens }
+          : {})
     }
   };
 }
