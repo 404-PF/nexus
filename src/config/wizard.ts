@@ -51,6 +51,16 @@ function jsonOrEmpty(value: unknown): string {
   return JSON.stringify(value ?? {}, null, 2) ?? '{}';
 }
 
+function numberOrUndefined(value: string): number | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
+
 async function promptMcpServer(existingServer?: McpServerConfig): Promise<McpServerConfig | null> {
   const name = await text({
     message: 'MCP server name',
@@ -215,10 +225,15 @@ async function promptMcpServers(existingServers: McpServerConfig[]): Promise<Mcp
   return nextServers;
 }
 
-async function promptProviderSettings(defaults: AppConfig): Promise<{
+async function promptProviderSettings(
+  defaults: AppConfig,
+  options: { includeAdvancedSettings: boolean }
+): Promise<{
   provider: ProviderKind;
   model: string;
   baseUrl?: string;
+  temperature?: number;
+  maxTokens?: number;
 } | null> {
   const provider = await select({
     message: 'Select your primary provider',
@@ -266,10 +281,76 @@ async function promptProviderSettings(defaults: AppConfig): Promise<{
     baseUrl = compatibleBaseUrl.trim() || undefined;
   }
 
+  if (!options.includeAdvancedSettings) {
+    return {
+      provider: provider as ProviderKind,
+      model,
+      ...(baseUrl ? { baseUrl } : {})
+    };
+  }
+
+  let temperature = defaults.provider.temperature;
+  while (true) {
+    const temperatureInput = await text({
+      message: 'Temperature (optional)',
+      placeholder: '0.7',
+      initialValue: defaults.provider.temperature?.toString() ?? ''
+    });
+
+    if (isCancel(temperatureInput)) {
+      cancel('Setup cancelled');
+      process.exit(0);
+    }
+
+    const parsedTemperature = numberOrUndefined(temperatureInput);
+    if (parsedTemperature === undefined) {
+      temperature = defaults.provider.temperature;
+      break;
+    }
+
+    if (Number.isNaN(parsedTemperature) || parsedTemperature < 0 || parsedTemperature > 2) {
+      console.log('Temperature must be a number between 0 and 2, or blank to keep the current value.');
+      continue;
+    }
+
+    temperature = parsedTemperature;
+    break;
+  }
+
+  let maxTokens = defaults.provider.maxTokens;
+  while (true) {
+    const maxTokensInput = await text({
+      message: 'Max tokens (optional)',
+      placeholder: '1024',
+      initialValue: defaults.provider.maxTokens?.toString() ?? ''
+    });
+
+    if (isCancel(maxTokensInput)) {
+      cancel('Setup cancelled');
+      process.exit(0);
+    }
+
+    const parsedMaxTokens = numberOrUndefined(maxTokensInput);
+    if (parsedMaxTokens === undefined) {
+      maxTokens = defaults.provider.maxTokens;
+      break;
+    }
+
+    if (!Number.isInteger(parsedMaxTokens) || parsedMaxTokens <= 0) {
+      console.log('Max tokens must be a positive whole number, or blank to keep the current value.');
+      continue;
+    }
+
+    maxTokens = parsedMaxTokens;
+    break;
+  }
+
   return {
     provider: provider as ProviderKind,
     model,
-    ...(baseUrl ? { baseUrl } : {})
+    ...(baseUrl ? { baseUrl } : {}),
+    ...(temperature !== undefined ? { temperature } : {}),
+    ...(maxTokens !== undefined ? { maxTokens } : {})
   };
 }
 
@@ -307,7 +388,7 @@ async function hasProviderSecret(provider: ProviderKind): Promise<boolean> {
 
 function applyProviderSelection(
   defaults: AppConfig,
-  selection: { provider: ProviderKind; model: string; baseUrl?: string }
+  selection: { provider: ProviderKind; model: string; baseUrl?: string; temperature?: number; maxTokens?: number }
 ): AppConfig {
   return {
     ...defaults,
@@ -315,8 +396,8 @@ function applyProviderSelection(
       kind: selection.provider,
       model: selection.model,
       ...(selection.baseUrl ? { baseUrl: selection.baseUrl } : {}),
-      ...(defaults.provider.temperature !== undefined ? { temperature: defaults.provider.temperature } : {}),
-      ...(defaults.provider.maxTokens !== undefined ? { maxTokens: defaults.provider.maxTokens } : {})
+      ...(selection.temperature !== undefined ? { temperature: selection.temperature } : {}),
+      ...(selection.maxTokens !== undefined ? { maxTokens: selection.maxTokens } : {})
     }
   };
 }
@@ -326,7 +407,7 @@ export async function runConfigWizard(seedConfig?: AppConfig): Promise<AppConfig
 
   console.clear();
 
-  const providerSelection = await promptProviderSettings(defaults);
+  const providerSelection = await promptProviderSettings(defaults, { includeAdvancedSettings: true });
   if (!providerSelection) {
     cancel('Setup cancelled');
     process.exit(0);
@@ -391,7 +472,7 @@ export async function runProviderSwitcher(seedConfig?: AppConfig): Promise<AppCo
 
   console.clear();
 
-  const providerSelection = await promptProviderSettings(defaults);
+  const providerSelection = await promptProviderSettings(defaults, { includeAdvancedSettings: false });
   if (!providerSelection) {
     cancel('Setup cancelled');
     process.exit(0);
