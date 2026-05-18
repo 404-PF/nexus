@@ -117,6 +117,16 @@ async function createSession(server: McpServerConfig): Promise<McpSession> {
   };
 }
 
+export async function testMcpServerConnection(server: McpServerConfig): Promise<number> {
+  const session = await createSession(server);
+
+  try {
+    return session.tools.length;
+  } finally {
+    await disposeSession(session);
+  }
+}
+
 async function disposeSession(session: McpSession): Promise<void> {
   try {
     await session.client.close();

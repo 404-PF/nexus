@@ -24,5 +24,3 @@ if (argv.has('--provider') || argv.has('provider') || argv.has('switch-provider'
 
 await runConfigWizard(existingConfig ?? undefined);
 process.exit(0);
-await runConfigWizard(existingConfig ?? undefined);
-process.exit(0);

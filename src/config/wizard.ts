@@ -13,38 +13,45 @@ import { saveConfig } from './persistence.js';
 import { resolveProviderSecret, storeProviderApiKey } from '../providers/auth.js';
 import { builtInProviderKinds, getProviderDefinition } from '../providers/catalog.js';
 import { nativeToolCatalog } from '../tools/nativeTools.js';
+import { testMcpServerConnection } from '../tools/mcpBridge.js';
 
-function asArray(value: string | undefined): string[] {
-  if (!value) {
-    return [];
+function parseJsonArrayOfStrings(value: string): { value: string[] } | { error: string } {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return { value: [] };
   }
 
   try {
-    const parsed = JSON.parse(value) as unknown;
-    return Array.isArray(parsed) && parsed.every((item) => typeof item === 'string') ? parsed : [];
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (Array.isArray(parsed) && parsed.every((item) => typeof item === 'string')) {
+      return { value: parsed };
+    }
   } catch {
-    return [];
+    return { error: 'Command args must be valid JSON, like ["server.js"].' };
   }
+
+  return { error: 'Command args must be a JSON array of strings.' };
 }
 
-function asRecord(value: string | undefined): Record<string, string> | undefined {
-  if (!value) {
-    return undefined;
+function parseJsonRecordOfStrings(value: string, label: string): { value: Record<string, string> } | { error: string } {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return { value: {} };
   }
 
   try {
-    const parsed = JSON.parse(value) as unknown;
+    const parsed = JSON.parse(trimmed) as unknown;
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       const entries = Object.entries(parsed as Record<string, unknown>);
       if (entries.every(([, item]) => typeof item === 'string')) {
-        return parsed as Record<string, string>;
+        return { value: parsed as Record<string, string> };
       }
     }
   } catch {
-    return undefined;
+    return { error: `${label} must be valid JSON, like {"Authorization":"Bearer ..."}.` };
   }
 
-  return undefined;
+  return { error: `${label} must be a JSON object with string values.` };
 }
 
 function jsonOrEmpty(value: unknown): string {
@@ -61,6 +68,71 @@ function numberOrUndefined(value: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : Number.NaN;
 }
 
+function normalizeHttpUrl(value: string): { value: string } | { error: string } {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return { error: 'HTTP MCP endpoint URL is required.' };
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return { error: 'HTTP MCP endpoint URL must start with http:// or https://.' };
+    }
+
+    return { value: trimmed };
+  } catch {
+    return { error: 'HTTP MCP endpoint URL must be a valid absolute URL.' };
+  }
+}
+
+async function promptJsonArray(message: string, placeholder: string, initialValue: string): Promise<string[] | null> {
+  while (true) {
+    const input = await text({
+      message,
+      placeholder,
+      initialValue
+    });
+
+    if (isCancel(input)) {
+      return null;
+    }
+
+    const parsed = parseJsonArrayOfStrings(input);
+    if ('value' in parsed) {
+      return parsed.value;
+    }
+
+    console.log(parsed.error);
+  }
+}
+
+async function promptJsonRecord(
+  message: string,
+  placeholder: string,
+  initialValue: string,
+  label: string
+): Promise<Record<string, string> | null> {
+  while (true) {
+    const input = await text({
+      message,
+      placeholder,
+      initialValue
+    });
+
+    if (isCancel(input)) {
+      return null;
+    }
+
+    const parsed = parseJsonRecordOfStrings(input, label);
+    if ('value' in parsed) {
+      return parsed.value;
+    }
+
+    console.log(parsed.error);
+  }
+}
+
 async function promptMcpServer(existingServer?: McpServerConfig): Promise<McpServerConfig | null> {
   const name = await text({
     message: 'MCP server name',
@@ -72,8 +144,14 @@ async function promptMcpServer(existingServer?: McpServerConfig): Promise<McpSer
     return null;
   }
 
+  const trimmedName = name.trim();
+  if (!trimmedName) {
+    console.log('MCP server name is required.');
+    return promptMcpServer(existingServer);
+  }
+
   const transport = await select({
-    message: `Transport for ${name}`,
+    message: `Transport for ${trimmedName}`,
     options: [
       { label: 'stdio', value: 'stdio' },
       { label: 'http', value: 'http' }
@@ -86,23 +164,28 @@ async function promptMcpServer(existingServer?: McpServerConfig): Promise<McpSer
   }
 
   if (transport === 'stdio') {
-    const command = await text({
-      message: 'Command to start the server',
-      placeholder: 'node',
-      initialValue: existingServer?.command ?? ''
-    });
+    let trimmedCommand = '';
+    while (true) {
+      const command = await text({
+        message: 'Command to start the server',
+        placeholder: 'node',
+        initialValue: existingServer?.command ?? ''
+      });
 
-    if (isCancel(command)) {
-      return null;
+      if (isCancel(command)) {
+        return null;
+      }
+
+      trimmedCommand = command.trim();
+      if (trimmedCommand) {
+        break;
+      }
+
+      console.log('stdio transport requires a command to start the server.');
     }
 
-    const args = await text({
-      message: 'Command args as JSON array',
-      placeholder: '["server.js"]',
-      initialValue: jsonOrEmpty(existingServer?.args ?? [])
-    });
-
-    if (isCancel(args)) {
+    const args = await promptJsonArray('Command args as JSON array', '["server.js"]', jsonOrEmpty(existingServer?.args ?? []));
+    if (args === null) {
       return null;
     }
 
@@ -116,27 +199,66 @@ async function promptMcpServer(existingServer?: McpServerConfig): Promise<McpSer
       return null;
     }
 
-    const env = await text({
-      message: 'Optional environment JSON object',
-      placeholder: '{"DEBUG":"1"}',
-      initialValue: jsonOrEmpty(existingServer?.env)
-    });
+    const env = await promptJsonRecord(
+      'Optional environment JSON object',
+      '{"DEBUG":"1"}',
+      jsonOrEmpty(existingServer?.env),
+      'Environment JSON'
+    );
 
-    if (isCancel(env)) {
+    if (env === null) {
       return null;
     }
 
-    const parsedEnv = asRecord(env);
-
-    return {
-      name,
+    const server: McpServerConfig = {
+      name: trimmedName,
       transport,
-      command,
-      args: asArray(args),
+      command: trimmedCommand,
+      args,
       ...(cwd.trim() ? { cwd: cwd.trim() } : {}),
-      ...(parsedEnv ? { env: parsedEnv } : {}),
+      ...(Object.keys(env).length ? { env } : {}),
       enabled: existingServer?.enabled ?? true
     };
+
+    const shouldTest = await confirm({
+      message: 'Test this MCP server connection now?',
+      initialValue: true
+    });
+
+    if (isCancel(shouldTest)) {
+      return null;
+    }
+
+    if (shouldTest) {
+      try {
+        const toolCount = await testMcpServerConnection(server);
+        console.log(`MCP server test passed: ${server.name} connected and exposed ${toolCount} tool(s).`);
+      } catch (error) {
+        console.log(
+          `MCP server test failed for ${server.name} [stdio]: ${error instanceof Error ? error.message : String(error)}`
+        );
+
+        const nextAction = await select({
+          message: 'What would you like to do?',
+          options: [
+            { label: 'Edit this server', value: 'edit' },
+            { label: 'Save anyway', value: 'save' },
+            { label: 'Cancel setup', value: 'cancel' }
+          ],
+          initialValue: 'edit'
+        });
+
+        if (isCancel(nextAction) || nextAction === 'cancel') {
+          return null;
+        }
+
+        if (nextAction === 'edit') {
+          return promptMcpServer(server);
+        }
+      }
+    }
+
+    return server;
   }
 
   const url = await text({
@@ -149,25 +271,81 @@ async function promptMcpServer(existingServer?: McpServerConfig): Promise<McpSer
     return null;
   }
 
-  const headers = await text({
-    message: 'Optional request headers JSON object',
-    placeholder: '{"Authorization":"Bearer ..."}',
-    initialValue: jsonOrEmpty(existingServer?.headers)
-  });
+  let normalizedUrl = normalizeHttpUrl(url);
+  while ('error' in normalizedUrl) {
+    console.log(normalizedUrl.error);
 
-  if (isCancel(headers)) {
+    const retryUrl = await text({
+      message: 'HTTP MCP endpoint URL',
+      placeholder: 'http://localhost:3000/mcp',
+      initialValue: existingServer?.url ?? ''
+    });
+
+    if (isCancel(retryUrl)) {
+      return null;
+    }
+
+    normalizedUrl = normalizeHttpUrl(retryUrl);
+  }
+
+  const headers = await promptJsonRecord(
+    'Optional request headers JSON object',
+    '{"Authorization":"Bearer ..."}',
+    jsonOrEmpty(existingServer?.headers),
+    'Request headers JSON'
+  );
+
+  if (headers === null) {
     return null;
   }
 
-  const parsedHeaders = asRecord(headers);
-
-  return {
-    name,
+  const server: McpServerConfig = {
+    name: trimmedName,
     transport,
-    url,
-    ...(parsedHeaders ? { headers: parsedHeaders } : {}),
+    url: normalizedUrl.value,
+    ...(Object.keys(headers).length ? { headers } : {}),
     enabled: existingServer?.enabled ?? true
   };
+
+  const shouldTest = await confirm({
+    message: 'Test this MCP server connection now?',
+    initialValue: true
+  });
+
+  if (isCancel(shouldTest)) {
+    return null;
+  }
+
+  if (shouldTest) {
+    try {
+      const toolCount = await testMcpServerConnection(server);
+      console.log(`MCP server test passed: ${server.name} connected and exposed ${toolCount} tool(s).`);
+    } catch (error) {
+      console.log(
+        `MCP server test failed for ${server.name} [http]: ${error instanceof Error ? error.message : String(error)}`
+      );
+
+      const nextAction = await select({
+        message: 'What would you like to do?',
+        options: [
+          { label: 'Edit this server', value: 'edit' },
+          { label: 'Save anyway', value: 'save' },
+          { label: 'Cancel setup', value: 'cancel' }
+        ],
+        initialValue: 'edit'
+      });
+
+      if (isCancel(nextAction) || nextAction === 'cancel') {
+        return null;
+      }
+
+      if (nextAction === 'edit') {
+        return promptMcpServer(server);
+      }
+    }
+  }
+
+  return server;
 }
 
 async function promptMcpServers(existingServers: McpServerConfig[]): Promise<McpServerConfig[] | null> {
