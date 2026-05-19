@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile, access, copyFile } from 'fs/promises';
 import { homedir } from 'os';
 import { join, resolve, dirname } from 'path';
+import { randomUUID } from 'crypto';
 import YAML from 'yaml';
 import type { AppConfig } from '../core/types.js';
 import { createDefaultConfig, parseConfig } from './schema.js';
@@ -44,8 +45,19 @@ export async function exportConfig(exportPath: string): Promise<void> {
   const absolutePath = resolve(exportPath);
   await mkdir(dirname(absolutePath), { recursive: true });
 
-  const output = YAML.stringify(config, { indent: 2 });
-  await writeFile(absolutePath, output, { encoding: 'utf8' });
+  try {
+    await access(absolutePath);
+    throw new Error(
+      `Target file already exists: ${absolutePath}. Remove it or choose a different path.`,
+    );
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      const output = YAML.stringify(config, { indent: 2 });
+      await writeFile(absolutePath, output, { encoding: 'utf8' });
+    } else {
+      throw error;
+    }
+  }
 }
 
 export async function importConfig(importPath: string): Promise<void> {
@@ -62,15 +74,17 @@ export async function importConfig(importPath: string): Promise<void> {
   let config: AppConfig;
   try {
     config = parseConfig(YAML.parse(raw));
-  } catch {
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : String(error);
     throw new Error(
-      'Invalid config file. The file must match the expected configuration format.',
+      `Invalid config file: ${message}`,
     );
   }
 
   const existing = await loadConfig();
   if (existing) {
-    const backupName = `config.yaml.backup.${Date.now()}`;
+    const backupName = `config.yaml.backup.${randomUUID()}`;
     await copyFile(configPath, join(agentHomeDir, backupName));
   }
 
