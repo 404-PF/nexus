@@ -129,8 +129,15 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
     return title;
   };
 
-  const persistConversation = (messages: ChatMessage[]): Promise<void> => {
-    const title = generateTitle(messages) ?? currentTitle;
+  const persistConversation = (
+    messages: ChatMessage[],
+    title: string | undefined,
+  ): Promise<void> => {
+    const resolvedTitle = generateTitle(messages) ?? title ?? currentTitle;
+    if (resolvedTitle !== currentTitle) {
+      currentTitle = resolvedTitle;
+      titleGenerated = true;
+    }
     transcriptWriteQueue = transcriptWriteQueue
       .catch(() => undefined)
       .then(async () => {
@@ -139,7 +146,7 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
           return;
         }
 
-        await saveTranscript(messages, title);
+        await saveTranscript(messages, currentTitle);
       });
 
     void transcriptWriteQueue.catch(() => undefined);
@@ -405,10 +412,7 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
 
       titleGenerated = loaded.title !== undefined;
       currentTitle = loaded.title;
-      state.replaceConversation(loaded.messages);
-      if (loaded.title) {
-        state.setTitle(loaded.title);
-      }
+      state.replaceConversation(loaded.messages, loaded.title);
     } catch (error) {
       state.setError(
         `Failed to open transcript: ${error instanceof Error ? error.message : String(error)}`,
@@ -522,11 +526,15 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
       return;
     }
 
-    currentTitle = trimmedTitle;
+    const finalTitle =
+      trimmedTitle.length > 60
+        ? `${trimmedTitle.slice(0, 57)}...`
+        : trimmedTitle;
+    currentTitle = finalTitle;
     titleGenerated = true;
-    state.setTitle(trimmedTitle);
+    state.setTitle(finalTitle);
     await waitForTranscriptWrites();
-    state.markIdle(`Conversation renamed to "${trimmedTitle}"`);
+    state.markIdle(`Conversation renamed to "${finalTitle}"`);
   };
 
   return {

@@ -42,7 +42,7 @@ const archiveIndexEntrySchema = z.object({
   messageCount: z.number(),
   preview: z.string(),
   updatedAt: z.string(),
-  title: z.string().or(z.undefined()).optional(),
+  title: z.string().optional(),
 });
 
 const archiveIndexSchema = z.object({
