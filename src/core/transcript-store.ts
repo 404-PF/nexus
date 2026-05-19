@@ -417,7 +417,7 @@ export async function listTranscripts(): Promise<
 > {
   const currentTranscript = await loadTranscript();
   const currentMessages = currentTranscript.messages;
-  const currentTranscriptEntry = currentMessages.length
+  const currentTranscriptEntries = currentMessages.length
     ? [
         {
           id: 'current',
@@ -447,7 +447,7 @@ export async function listTranscripts(): Promise<
     title: transcript.title,
   }));
 
-  return [...currentTranscriptEntry, ...archivedSummaries].sort((left, right) =>
+  return [...currentTranscriptEntries, ...archivedSummaries].sort((left, right) =>
     right.updatedAt.localeCompare(left.updatedAt),
   );
 }

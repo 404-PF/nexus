@@ -105,6 +105,7 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
   const initialTitle = loadedTranscript.title;
   let transcriptWriteQueue = Promise.resolve();
   let transcriptArchiveQueue = Promise.resolve();
+  let lastWriteSucceeded = true;
   let activeConfig = config;
 
   let titleGenerated = initialTitle !== undefined;
@@ -138,15 +139,22 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
       currentTitle = resolvedTitle;
       titleGenerated = true;
     }
+    const savedTitle = currentTitle;
     transcriptWriteQueue = transcriptWriteQueue
       .catch(() => undefined)
       .then(async () => {
         if (messages.length === 0) {
           await clearTranscript();
+          lastWriteSucceeded = true;
           return;
         }
 
-        await saveTranscript(messages, currentTitle);
+        try {
+          await saveTranscript(messages, savedTitle);
+          lastWriteSucceeded = true;
+        } catch {
+          lastWriteSucceeded = false;
+        }
       });
 
     void transcriptWriteQueue.catch(() => undefined);
@@ -164,10 +172,11 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
   const archiveConversation = async (
     messages: ChatMessage[],
   ): Promise<void> => {
+    const savedTitle = currentTitle;
     transcriptArchiveQueue = transcriptArchiveQueue
       .catch(() => undefined)
       .then(async () => {
-        await archiveTranscript(messages, currentTitle);
+        await archiveTranscript(messages, savedTitle);
       });
 
     void transcriptArchiveQueue.catch(() => undefined);
@@ -534,7 +543,11 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
     titleGenerated = true;
     state.setTitle(finalTitle);
     await waitForTranscriptWrites();
-    state.markIdle(`Conversation renamed to "${finalTitle}"`);
+    if (lastWriteSucceeded) {
+      state.markIdle(`Conversation renamed to "${finalTitle}"`);
+    } else {
+      state.markIdle(`Title updated in memory, but failed to persist to disk`);
+    }
   };
 
   return {
