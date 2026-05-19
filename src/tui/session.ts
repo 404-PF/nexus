@@ -403,10 +403,8 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
         await archiveConversation(currentMessages);
       }
 
-      if (loaded.title) {
-        titleGenerated = true;
-        currentTitle = loaded.title;
-      }
+      titleGenerated = loaded.title !== undefined;
+      currentTitle = loaded.title;
       state.replaceConversation(loaded.messages);
       if (loaded.title) {
         state.setTitle(loaded.title);
