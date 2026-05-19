@@ -103,9 +103,8 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
   const loadedTranscript = await loadTranscript();
   const initialMessages = loadedTranscript.messages;
   const initialTitle = loadedTranscript.title;
-  let transcriptWriteQueue = Promise.resolve();
+  let transcriptWriteQueue = Promise.resolve<boolean>(true);
   let transcriptArchiveQueue = Promise.resolve();
-  let lastWriteSucceeded = true;
   let activeConfig = config;
 
   let titleGenerated = initialTitle !== undefined;
@@ -133,7 +132,7 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
   const persistConversation = (
     messages: ChatMessage[],
     title: string | undefined,
-  ): Promise<void> => {
+  ): Promise<boolean> => {
     const resolvedTitle = generateTitle(messages) ?? title ?? currentTitle;
     if (resolvedTitle !== currentTitle) {
       currentTitle = resolvedTitle;
@@ -141,19 +140,18 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
     }
     const savedTitle = currentTitle;
     transcriptWriteQueue = transcriptWriteQueue
-      .catch(() => undefined)
+      .catch(() => true)
       .then(async () => {
         if (messages.length === 0) {
           await clearTranscript();
-          lastWriteSucceeded = true;
-          return;
+          return true;
         }
 
         try {
           await saveTranscript(messages, savedTitle);
-          lastWriteSucceeded = true;
+          return true;
         } catch {
-          lastWriteSucceeded = false;
+          return false;
         }
       });
 
@@ -161,8 +159,8 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
     return transcriptWriteQueue;
   };
 
-  const waitForTranscriptWrites = async (): Promise<void> => {
-    await transcriptWriteQueue.catch(() => undefined);
+  const waitForTranscriptWrites = async (): Promise<boolean> => {
+    return transcriptWriteQueue.catch(() => false);
   };
 
   const waitForTranscriptArchives = async (): Promise<void> => {
@@ -419,7 +417,7 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
         await archiveConversation(currentMessages);
       }
 
-      titleGenerated = loaded.title !== undefined;
+      titleGenerated = true;
       currentTitle = loaded.title;
       state.replaceConversation(loaded.messages, loaded.title);
     } catch (error) {
@@ -542,8 +540,8 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
     currentTitle = finalTitle;
     titleGenerated = true;
     state.setTitle(finalTitle);
-    await waitForTranscriptWrites();
-    if (lastWriteSucceeded) {
+    const succeeded = await waitForTranscriptWrites();
+    if (succeeded) {
       state.markIdle(`Conversation renamed to "${finalTitle}"`);
     } else {
       state.markIdle(`Title updated in memory, but failed to persist to disk`);

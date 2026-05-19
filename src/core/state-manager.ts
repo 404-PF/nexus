@@ -22,7 +22,7 @@ export interface AgentStateOptions {
   onConversationChange?: (
     messages: ChatMessage[],
     title: string | undefined,
-  ) => void | Promise<void>;
+  ) => void | Promise<void> | Promise<boolean>;
 }
 
 export class AgentStateManager {
@@ -34,7 +34,7 @@ export class AgentStateManager {
     | ((
         messages: ChatMessage[],
         title: string | undefined,
-      ) => void | Promise<void>)
+      ) => void | Promise<void> | Promise<boolean>)
     | undefined;
 
   public constructor(config: AppConfig, options: AgentStateOptions = {}) {
