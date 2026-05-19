@@ -417,7 +417,7 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
         await archiveConversation(currentMessages);
       }
 
-      titleGenerated = true;
+      titleGenerated = loaded.title !== undefined;
       currentTitle = loaded.title;
       state.replaceConversation(loaded.messages, loaded.title);
     } catch (error) {
@@ -540,11 +540,17 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
     currentTitle = finalTitle;
     titleGenerated = true;
     state.setTitle(finalTitle);
-    const succeeded = await waitForTranscriptWrites();
-    if (succeeded) {
-      state.markIdle(`Conversation renamed to "${finalTitle}"`);
-    } else {
-      state.markIdle(`Title updated in memory, but failed to persist to disk`);
+    try {
+      const succeeded = await waitForTranscriptWrites();
+      if (succeeded) {
+        state.markIdle(`Conversation renamed to "${finalTitle}"`);
+      } else {
+        state.markIdle(`Title updated in memory, but failed to persist to disk`);
+      }
+    } finally {
+      if (state.getSnapshot().isBusy) {
+        state.markIdle();
+      }
     }
   };
 
