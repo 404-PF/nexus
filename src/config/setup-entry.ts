@@ -2,7 +2,6 @@ import { runConfigWizard, runProviderSwitcher } from './wizard.js';
 import { loadConfig, exportConfig, importConfig } from './persistence.js';
 
 const argv = process.argv.slice(2);
-const argSet = new Set(argv);
 let existingConfig: Awaited<ReturnType<typeof loadConfig>> = null;
 
 try {
@@ -16,6 +15,10 @@ try {
     );
     existingConfig = null;
   }
+}
+
+function hasArg(prefix: string): boolean {
+  return argv.some((arg) => arg === prefix || arg.startsWith(`${prefix}=`));
 }
 
 function findArgValue(prefix: string): string | undefined {
@@ -37,15 +40,15 @@ function findArgValue(prefix: string): string | undefined {
 }
 
 if (
-  argSet.has('--provider') ||
-  argSet.has('provider') ||
-  argSet.has('switch-provider')
+  hasArg('--provider') ||
+  hasArg('provider') ||
+  hasArg('switch-provider')
 ) {
   await runProviderSwitcher(existingConfig ?? undefined);
   process.exit(0);
 }
 
-if (argSet.has('--backup') || argSet.has('--export')) {
+if (hasArg('--backup') || hasArg('--export')) {
   const path = findArgValue('--backup') ?? findArgValue('--export');
   if (!path) {
     console.error(
@@ -67,7 +70,7 @@ if (argSet.has('--backup') || argSet.has('--export')) {
   process.exit(0);
 }
 
-if (argSet.has('--restore') || argSet.has('--import')) {
+if (hasArg('--restore') || hasArg('--import')) {
   const path = findArgValue('--restore') ?? findArgValue('--import');
   if (!path) {
     console.error(
