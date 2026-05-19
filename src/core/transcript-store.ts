@@ -452,23 +452,6 @@ export async function listTranscripts(): Promise<
   );
 }
 
-export async function renameTranscript(title: string): Promise<void> {
-  try {
-    const raw = await readFile(transcriptPath, 'utf8');
-    const parsed = transcriptSchema.parse(YAML.parse(raw));
-    const output = YAML.stringify(
-      { messages: parsed.messages, ...(title !== undefined ? { title } : {}) },
-      { indent: 2 },
-    );
-    await writeFile(transcriptPath, output, { encoding: 'utf8' });
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return;
-    }
-    throw error;
-  }
-}
-
 export async function clearTranscript(): Promise<void> {
   try {
     await unlink(transcriptPath);

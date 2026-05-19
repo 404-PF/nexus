@@ -179,10 +179,6 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
   await tools.refresh();
   state.setMcpInspector(tools.getMcpInspector());
 
-  const syncTitle = () => {
-    currentTitle = state.getSnapshot().title;
-  };
-
   let activeController: AbortController | null = null;
   let refreshInProgress = false;
   let refreshPromise: Promise<void> | null = null;
@@ -410,9 +406,11 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
       if (loaded.title) {
         titleGenerated = true;
         currentTitle = loaded.title;
-        state.setTitle(loaded.title);
       }
       state.replaceConversation(loaded.messages);
+      if (loaded.title) {
+        state.setTitle(loaded.title);
+      }
     } catch (error) {
       state.setError(
         `Failed to open transcript: ${error instanceof Error ? error.message : String(error)}`,
@@ -526,8 +524,8 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
       return;
     }
 
+    currentTitle = trimmedTitle;
     state.setTitle(trimmedTitle);
-    syncTitle();
     await waitForTranscriptWrites();
     state.markIdle(`Conversation renamed to "${trimmedTitle}"`);
   };
