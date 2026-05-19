@@ -75,6 +75,7 @@ export function StatusBar({
   authSource,
   busy,
   error,
+  title,
 }: {
   status: string;
   provider: string;
@@ -82,10 +83,12 @@ export function StatusBar({
   authSource: string;
   busy: boolean;
   error: string | undefined;
+  title: string | undefined;
 }): ReactElement {
   return (
     <Box flexDirection="column" marginTop={1}>
       <Text color={busy ? 'yellow' : 'green'}>
+        {title ? `${title}  ` : ''}
         {status}
         {'  '}
         {provider}/{model}

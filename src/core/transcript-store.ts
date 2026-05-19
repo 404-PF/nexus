@@ -30,6 +30,7 @@ const chatMessageSchema = z.object({
 
 const transcriptSchema = z.object({
   messages: z.array(chatMessageSchema),
+  title: z.string().optional(),
 });
 
 export const transcriptPath = join(agentHomeDir, 'history.yaml');
@@ -41,6 +42,7 @@ const archiveIndexEntrySchema = z.object({
   messageCount: z.number(),
   preview: z.string(),
   updatedAt: z.string(),
+  title: z.string().or(z.undefined()).optional(),
 });
 
 const archiveIndexSchema = z.object({
@@ -52,6 +54,7 @@ type ArchiveSummary = {
   messageCount: number;
   preview: string;
   updatedAt: string;
+  title: string | undefined;
 };
 
 async function ensureAgentHome(): Promise<void> {
@@ -83,12 +86,6 @@ function mapTranscriptMessage(
         }
       : {}),
   };
-}
-
-async function readTranscriptFile(path: string): Promise<ChatMessage[] | null> {
-  const raw = await readFile(path, 'utf8');
-  const parsed = transcriptSchema.parse(YAML.parse(raw));
-  return parsed.messages.map(mapTranscriptMessage);
 }
 
 function summarizeTranscript(messages: ChatMessage[]): string {
@@ -198,13 +195,16 @@ async function readArchiveSummaryFromFile(
   const filePath = join(transcriptArchiveDir, fileName);
 
   try {
-    const messages = await readTranscriptFile(filePath);
+    const raw = await readFile(filePath, 'utf8');
+    const parsed = transcriptSchema.parse(YAML.parse(raw));
+    const messages = parsed.messages.map(mapTranscriptMessage);
     const fileStat = await stat(filePath);
     return {
       id: fileName,
       messageCount: messages?.length ?? 0,
       preview: summarizeTranscript(messages ?? []),
       updatedAt: fileStat.mtime.toISOString(),
+      title: parsed.title,
     };
   } catch (error) {
     debug(
@@ -258,29 +258,46 @@ async function rewriteArchiveIndex(entries: ArchiveSummary[]): Promise<void> {
   );
 }
 
-export async function loadTranscript(): Promise<ChatMessage[]> {
+export interface LoadedTranscript {
+  messages: ChatMessage[];
+  title: string | undefined;
+}
+
+export async function loadTranscript(): Promise<LoadedTranscript> {
   try {
-    return (await readTranscriptFile(transcriptPath)) ?? [];
+    const raw = await readFile(transcriptPath, 'utf8');
+    const parsed = transcriptSchema.parse(YAML.parse(raw));
+    return {
+      messages: parsed.messages.map(mapTranscriptMessage),
+      title: parsed.title,
+    };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return [];
+      return { messages: [], title: undefined };
     }
 
     debug(
       `Failed to load current transcript: ${error instanceof Error ? error.message : String(error)}`,
     );
-    return [];
+    return { messages: [], title: undefined };
   }
 }
 
-export async function saveTranscript(messages: ChatMessage[]): Promise<void> {
+export async function saveTranscript(
+  messages: ChatMessage[],
+  title?: string,
+): Promise<void> {
   await ensureAgentHome();
-  const output = YAML.stringify({ messages }, { indent: 2 });
+  const output = YAML.stringify(
+    { messages, ...(title !== undefined ? { title } : {}) },
+    { indent: 2 },
+  );
   await writeFile(transcriptPath, output, { encoding: 'utf8' });
 }
 
 export async function archiveTranscript(
   messages: ChatMessage[],
+  title?: string,
 ): Promise<void> {
   if (messages.length === 0) {
     return;
@@ -288,7 +305,10 @@ export async function archiveTranscript(
 
   await ensureTranscriptArchiveDir();
   const fileName = createArchiveFileName();
-  const output = YAML.stringify({ messages }, { indent: 2 });
+  const output = YAML.stringify(
+    { messages, ...(title !== undefined ? { title } : {}) },
+    { indent: 2 },
+  );
   await writeFile(join(transcriptArchiveDir, fileName), output, {
     encoding: 'utf8',
   });
@@ -299,6 +319,7 @@ export async function archiveTranscript(
     messageCount: messages.length,
     preview,
     updatedAt: new Date().toISOString(),
+    title,
   };
 
   try {
@@ -323,14 +344,7 @@ export async function archiveTranscript(
   }
 }
 
-export async function loadArchivedSummaries(): Promise<
-  Array<{
-    id: string;
-    messageCount: number;
-    preview: string;
-    updatedAt: string;
-  }>
-> {
+export async function loadArchivedSummaries(): Promise<ArchiveSummary[]> {
   await ensureTranscriptArchiveDir();
 
   const archiveFiles = await listArchiveFiles();
@@ -345,7 +359,7 @@ export async function loadArchivedSummaries(): Promise<
     for (const fileName of archiveFiles) {
       const indexedSummary = indexedEntries.get(fileName);
       if (indexedSummary) {
-        summaries.push(indexedSummary);
+        summaries.push(indexedSummary as ArchiveSummary);
         continue;
       }
 
@@ -364,7 +378,7 @@ export async function loadArchivedSummaries(): Promise<
   }
 }
 
-export async function loadTranscriptById(id: string): Promise<ChatMessage[]> {
+export async function loadTranscriptById(id: string): Promise<LoadedTranscript> {
   if (id === 'current') {
     return await loadTranscript();
   }
@@ -377,8 +391,12 @@ export async function loadTranscriptById(id: string): Promise<ChatMessage[]> {
   }
 
   try {
-    const messages = await readTranscriptFile(resolvedPath);
-    return messages ?? [];
+    const raw = await readFile(resolvedPath, 'utf8');
+    const parsed = transcriptSchema.parse(YAML.parse(raw));
+    return {
+      messages: parsed.messages.map(mapTranscriptMessage),
+      title: parsed.title,
+    };
   } catch (error) {
     throw new Error(
       `Failed to read transcript "${id}": ${error instanceof Error ? error.message : String(error)}`,
@@ -394,19 +412,22 @@ export async function listTranscripts(): Promise<
     preview: string;
     updatedAt: string;
     isCurrent: boolean;
+    title: string | undefined;
   }>
 > {
-  const currentMessages = await loadTranscript();
-  const currentTranscript = currentMessages.length
+  const currentTranscript = await loadTranscript();
+  const currentMessages = currentTranscript.messages;
+  const currentTranscriptEntry = currentMessages.length
     ? [
         {
           id: 'current',
-          label: 'Current conversation',
+          label: currentTranscript.title ?? 'Current conversation',
           messageCount: currentMessages.length,
           preview: summarizeTranscript(currentMessages),
           updatedAt:
             (await statIfExists(transcriptPath)) ?? new Date(0).toISOString(),
           isCurrent: true,
+          title: currentTranscript.title,
         },
       ]
     : [];
@@ -415,18 +436,37 @@ export async function listTranscripts(): Promise<
   const archivedSummaries = archiveTranscripts.map((transcript) => ({
     id: transcript.id,
     label:
-      transcript.preview.length > 48
+      transcript.title ??
+      (transcript.preview.length > 48
         ? `${transcript.preview.slice(0, 45)}...`
-        : transcript.preview,
+        : transcript.preview),
     messageCount: transcript.messageCount,
     preview: transcript.preview,
     updatedAt: transcript.updatedAt,
     isCurrent: false,
+    title: transcript.title,
   }));
 
-  return [...currentTranscript, ...archivedSummaries].sort((left, right) =>
+  return [...currentTranscriptEntry, ...archivedSummaries].sort((left, right) =>
     right.updatedAt.localeCompare(left.updatedAt),
   );
+}
+
+export async function renameTranscript(title: string): Promise<void> {
+  try {
+    const raw = await readFile(transcriptPath, 'utf8');
+    const parsed = transcriptSchema.parse(YAML.parse(raw));
+    const output = YAML.stringify(
+      { messages: parsed.messages, ...(title !== undefined ? { title } : {}) },
+      { indent: 2 },
+    );
+    await writeFile(transcriptPath, output, { encoding: 'utf8' });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return;
+    }
+    throw error;
+  }
 }
 
 export async function clearTranscript(): Promise<void> {

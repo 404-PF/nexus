@@ -3,6 +3,7 @@ import type { AppConfig, ChatMessage, McpInspectorSnapshot } from './types.js';
 export interface AgentStateSnapshot {
   config: AppConfig;
   messages: ChatMessage[];
+  title: string | undefined;
   authSource: ProviderAuthSource;
   status: string;
   isBusy: boolean;
@@ -17,6 +18,7 @@ type StateListener = () => void;
 
 export interface AgentStateOptions {
   initialMessages?: ChatMessage[];
+  initialTitle?: string | undefined;
   onConversationChange?: (messages: ChatMessage[]) => void | Promise<void>;
 }
 
@@ -34,6 +36,7 @@ export class AgentStateManager {
     this.snapshotValue = {
       config,
       messages: structuredClone(options.initialMessages ?? []),
+      title: options.initialTitle,
       authSource: 'missing',
       status: 'Idle',
       isBusy: false,
@@ -122,6 +125,7 @@ export class AgentStateManager {
   public clearConversation(): void {
     this.update((snapshot) => {
       snapshot.messages = [];
+      snapshot.title = undefined;
       snapshot.status = 'Idle';
       snapshot.isBusy = false;
       snapshot.streamingText = '';
@@ -135,10 +139,19 @@ export class AgentStateManager {
   public replaceConversation(messages: ChatMessage[]): void {
     this.update((snapshot) => {
       snapshot.messages = structuredClone(messages);
+      snapshot.title = undefined;
       snapshot.status = 'Idle';
       snapshot.isBusy = false;
       snapshot.streamingText = '';
       snapshot.error = undefined;
+    });
+
+    this.notifyConversationChange();
+  }
+
+  public setTitle(title: string): void {
+    this.update((snapshot) => {
+      snapshot.title = title;
     });
 
     this.notifyConversationChange();
