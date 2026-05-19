@@ -540,17 +540,11 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
     currentTitle = finalTitle;
     titleGenerated = true;
     state.setTitle(finalTitle);
-    try {
-      const succeeded = await waitForTranscriptWrites();
-      if (succeeded) {
-        state.markIdle(`Conversation renamed to "${finalTitle}"`);
-      } else {
-        state.markIdle(`Title updated in memory, but failed to persist to disk`);
-      }
-    } finally {
-      if (state.getSnapshot().isBusy) {
-        state.markIdle();
-      }
+    const succeeded = await waitForTranscriptWrites();
+    if (succeeded) {
+      state.markIdle(`Conversation renamed to "${finalTitle}"`);
+    } else {
+      state.markIdle(`Title updated in memory, but failed to persist to disk`);
     }
   };
 

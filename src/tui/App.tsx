@@ -150,9 +150,6 @@ export function App({ session }: { session: TuiSession }): ReactElement {
 
       if (key.return) {
         const value = renameDraft.trim();
-        if (!value) {
-          return;
-        }
 
         void (async () => {
           try {
