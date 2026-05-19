@@ -31,7 +31,7 @@ function findArgValue(prefix: string): string | undefined {
   const index = argv.indexOf(prefix);
   if (index !== -1 && index + 1 < argv.length) {
     const next = argv[index + 1];
-    if (next && !next.startsWith('--')) {
+    if (next && !next.startsWith('-')) {
       return next;
     }
   }

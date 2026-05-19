@@ -1,6 +1,6 @@
-import { mkdir, readFile, writeFile, access } from 'fs/promises';
+import { mkdir, readFile, writeFile, access, copyFile } from 'fs/promises';
 import { homedir } from 'os';
-import { join, resolve } from 'path';
+import { join, resolve, dirname } from 'path';
 import YAML from 'yaml';
 import type { AppConfig } from '../core/types.js';
 import { createDefaultConfig, parseConfig } from './schema.js';
@@ -42,8 +42,7 @@ export async function exportConfig(exportPath: string): Promise<void> {
   }
 
   const absolutePath = resolve(exportPath);
-  const dir = join(absolutePath, '..');
-  await mkdir(dir, { recursive: true });
+  await mkdir(dirname(absolutePath), { recursive: true });
 
   const output = YAML.stringify(config, { indent: 2 });
   await writeFile(absolutePath, output, { encoding: 'utf8' });
@@ -59,6 +58,21 @@ export async function importConfig(importPath: string): Promise<void> {
   }
 
   const raw = await readFile(absolutePath, 'utf8');
-  const config = parseConfig(YAML.parse(raw));
+
+  let config: AppConfig;
+  try {
+    config = parseConfig(YAML.parse(raw));
+  } catch {
+    throw new Error(
+      'Invalid config file. The file must match the expected configuration format.',
+    );
+  }
+
+  const existing = await loadConfig();
+  if (existing) {
+    const backupName = `config.yaml.backup.${Date.now()}`;
+    await copyFile(configPath, join(agentHomeDir, backupName));
+  }
+
   await saveConfig(config);
 }
