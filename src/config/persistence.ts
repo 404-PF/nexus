@@ -45,18 +45,16 @@ export async function exportConfig(exportPath: string): Promise<void> {
   const absolutePath = resolve(exportPath);
   await mkdir(dirname(absolutePath), { recursive: true });
 
+  const output = YAML.stringify(config, { indent: 2 });
   try {
-    await access(absolutePath);
-    throw new Error(
-      `Target file already exists: ${absolutePath}. Remove it or choose a different path.`,
-    );
+    await writeFile(absolutePath, output, { encoding: 'utf8', flag: 'wx' });
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      const output = YAML.stringify(config, { indent: 2 });
-      await writeFile(absolutePath, output, { encoding: 'utf8' });
-    } else {
-      throw error;
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+      throw new Error(
+        `Target file already exists: ${absolutePath}. Remove it or choose a different path.`,
+      );
     }
+    throw error;
   }
 }
 
@@ -85,7 +83,13 @@ export async function importConfig(importPath: string): Promise<void> {
   const existing = await loadConfig();
   if (existing) {
     const backupName = `config.yaml.backup.${randomUUID()}`;
-    await copyFile(configPath, join(agentHomeDir, backupName));
+    try {
+      await copyFile(configPath, join(agentHomeDir, backupName));
+    } catch (error) {
+      throw new Error(
+        `Failed to backup existing config before import: ${(error as Error).message}`,
+      );
+    }
   }
 
   await saveConfig(config);
