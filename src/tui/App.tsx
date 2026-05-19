@@ -30,6 +30,8 @@ export function App({ session }: { session: TuiSession }): ReactElement {
   const [draft, setDraft] = useState('');
   const [exportDraft, setExportDraft] = useState('');
   const [exportPromptOpen, setExportPromptOpen] = useState(false);
+  const [renameDraft, setRenameDraft] = useState('');
+  const [renamePromptOpen, setRenamePromptOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteIndex, setPaletteIndex] = useState(0);
   const [transcriptBrowserOpen, setTranscriptBrowserOpen] = useState(false);
@@ -134,6 +136,45 @@ export function App({ session }: { session: TuiSession }): ReactElement {
       return;
     }
 
+    if (renamePromptOpen) {
+      if (key.ctrl && input === 'c') {
+        exit();
+        return;
+      }
+
+      if (key.escape) {
+        setRenamePromptOpen(false);
+        setRenameDraft('');
+        return;
+      }
+
+      if (key.return) {
+        const value = renameDraft.trim();
+
+        void (async () => {
+          try {
+            await session.renameConversation(value);
+            setRenamePromptOpen(false);
+            setRenameDraft('');
+          } catch {
+            // The session already surfaced the failure.
+          }
+        })();
+        return;
+      }
+
+      if (key.backspace || key.delete) {
+        setRenameDraft((value) => value.slice(0, -1));
+        return;
+      }
+
+      if (input) {
+        setRenameDraft((value) => `${value}${input}`);
+      }
+
+      return;
+    }
+
     if (transcriptBrowserOpen) {
       if (key.ctrl && input === 'c') {
         exit();
@@ -199,6 +240,9 @@ export function App({ session }: { session: TuiSession }): ReactElement {
             } else if (action === CommandAction.ExportTranscript) {
               setExportDraft(createDefaultTranscriptExportName());
               setExportPromptOpen(true);
+            } else if (action === CommandAction.RenameConversation) {
+              setRenameDraft(snapshot.title ?? '');
+              setRenamePromptOpen(true);
             }
           })();
           if (selected.id === 'quit') {
@@ -259,15 +303,30 @@ export function App({ session }: { session: TuiSession }): ReactElement {
         authSource={snapshot.authSource}
         busy={snapshot.isBusy}
         error={snapshot.error}
+        title={snapshot.title}
       />
       <McpInspectorPanel inspector={snapshot.mcpInspector} />
       <InputLine
-        draft={exportPromptOpen ? exportDraft : draft}
-        prompt={exportPromptOpen ? 'Export transcript to: ' : '> '}
+        draft={
+          exportPromptOpen
+            ? exportDraft
+            : renamePromptOpen
+              ? renameDraft
+              : draft
+        }
+        prompt={
+          exportPromptOpen
+            ? 'Export transcript to: '
+            : renamePromptOpen
+              ? 'Rename conversation: '
+              : '> '
+        }
         placeholder={
           exportPromptOpen
             ? 'transcript-2026-05-18T12-34-56.789Z.txt'
-            : 'Type a message. Ctrl+K opens the command palette.'
+            : renamePromptOpen
+              ? 'Enter a title for this conversation'
+              : 'Type a message. Ctrl+K opens the command palette.'
         }
       />
       {paletteOpen ? (

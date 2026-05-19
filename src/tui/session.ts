@@ -69,6 +69,7 @@ export interface TuiCommand {
 export enum CommandAction {
   BrowseTranscripts = 'browse-transcripts',
   ExportTranscript = 'export-transcript',
+  RenameConversation = 'rename-conversation',
 }
 
 export interface TuiSession {
@@ -79,6 +80,7 @@ export interface TuiSession {
   listTranscripts(): Promise<TranscriptSummary[]>;
   openTranscript(transcriptId: string): Promise<void>;
   exportTranscript(filePath: string): Promise<void>;
+  renameConversation(title: string): Promise<void>;
   refreshAuth(): Promise<void>;
   refreshTools(): Promise<void>;
   clearConversation(): void;
@@ -94,32 +96,71 @@ export interface TranscriptSummary {
   preview: string;
   updatedAt: string;
   isCurrent: boolean;
+  title: string | undefined;
 }
 
 export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
-  const initialMessages = await loadTranscript();
-  let transcriptWriteQueue = Promise.resolve();
+  const loadedTranscript = await loadTranscript();
+  const initialMessages = loadedTranscript.messages;
+  const initialTitle = loadedTranscript.title;
+  let transcriptWriteQueue = Promise.resolve<boolean>(true);
   let transcriptArchiveQueue = Promise.resolve();
   let activeConfig = config;
 
-  const persistConversation = (messages: ChatMessage[]): Promise<void> => {
+  let titleGenerated = initialTitle !== undefined;
+  let currentTitle: string | undefined = initialTitle;
+
+  const generateTitle = (messages: ChatMessage[]): string | undefined => {
+    if (titleGenerated) {
+      return undefined;
+    }
+    const firstUserMessage = messages.find((m) => m.role === 'user');
+    if (!firstUserMessage) {
+      return undefined;
+    }
+    const content = firstUserMessage.content.trim();
+    if (!content) {
+      return undefined;
+    }
+    titleGenerated = true;
+    const title =
+      content.length > 60 ? `${content.slice(0, 57)}...` : content;
+    currentTitle = title;
+    return title;
+  };
+
+  const persistConversation = (
+    messages: ChatMessage[],
+    title: string | undefined,
+  ): Promise<boolean> => {
+    const resolvedTitle = generateTitle(messages) ?? title ?? currentTitle;
+    if (resolvedTitle !== currentTitle) {
+      currentTitle = resolvedTitle;
+      titleGenerated = true;
+    }
+    const savedTitle = currentTitle;
     transcriptWriteQueue = transcriptWriteQueue
-      .catch(() => undefined)
+      .catch(() => true)
       .then(async () => {
         if (messages.length === 0) {
           await clearTranscript();
-          return;
+          return true;
         }
 
-        await saveTranscript(messages);
+        try {
+          await saveTranscript(messages, savedTitle);
+          return true;
+        } catch {
+          return false;
+        }
       });
 
     void transcriptWriteQueue.catch(() => undefined);
     return transcriptWriteQueue;
   };
 
-  const waitForTranscriptWrites = async (): Promise<void> => {
-    await transcriptWriteQueue.catch(() => undefined);
+  const waitForTranscriptWrites = async (): Promise<boolean> => {
+    return transcriptWriteQueue.catch(() => false);
   };
 
   const waitForTranscriptArchives = async (): Promise<void> => {
@@ -129,10 +170,11 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
   const archiveConversation = async (
     messages: ChatMessage[],
   ): Promise<void> => {
+    const savedTitle = currentTitle;
     transcriptArchiveQueue = transcriptArchiveQueue
       .catch(() => undefined)
       .then(async () => {
-        await archiveTranscript(messages);
+        await archiveTranscript(messages, savedTitle);
       });
 
     void transcriptArchiveQueue.catch(() => undefined);
@@ -141,6 +183,7 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
 
   const state = new AgentStateManager(config, {
     initialMessages,
+    initialTitle,
     onConversationChange: persistConversation,
   });
   const initialProvider = await createProviderClient(activeConfig);
@@ -340,6 +383,8 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
 
       state.clearConversation();
       state.setMcpInspector(tools.getMcpInspector());
+      titleGenerated = false;
+      currentTitle = undefined;
     } catch (error) {
       state.setError(
         `Failed to start a new chat: ${error instanceof Error ? error.message : String(error)}`,
@@ -362,17 +407,19 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
     try {
       await waitForTranscriptWrites();
       await waitForTranscriptArchives();
-      const messages = await loadTranscriptById(transcriptId);
+      const loaded = await loadTranscriptById(transcriptId);
       const currentMessages = state.getSnapshot().messages;
       if (
         transcriptId !== 'current' &&
         currentMessages.length > 0 &&
-        !messagesMatch(currentMessages, messages)
+        !messagesMatch(currentMessages, loaded.messages)
       ) {
         await archiveConversation(currentMessages);
       }
 
-      state.replaceConversation(messages);
+      titleGenerated = loaded.title !== undefined;
+      currentTitle = loaded.title;
+      state.replaceConversation(loaded.messages, loaded.title);
     } catch (error) {
       state.setError(
         `Failed to open transcript: ${error instanceof Error ? error.message : String(error)}`,
@@ -432,6 +479,8 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
         return CommandAction.BrowseTranscripts;
       case 'export-transcript':
         return CommandAction.ExportTranscript;
+      case 'rename-conversation':
+        return CommandAction.RenameConversation;
       case 'edit-config':
         if (state.getSnapshot().isBusy) {
           state.setStatus('Finish the active turn before editing config');
@@ -472,6 +521,33 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
     }
   };
 
+  const renameCurrentConversation = async (title: string): Promise<void> => {
+    if (state.getSnapshot().isBusy) {
+      state.setStatus('Finish the active turn before renaming conversation');
+      return;
+    }
+
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) {
+      state.setStatus('Conversation title cannot be empty');
+      return;
+    }
+
+    const finalTitle =
+      trimmedTitle.length > 60
+        ? `${trimmedTitle.slice(0, 57)}...`
+        : trimmedTitle;
+    currentTitle = finalTitle;
+    titleGenerated = true;
+    state.setTitle(finalTitle);
+    const succeeded = await waitForTranscriptWrites();
+    if (succeeded) {
+      state.markIdle(`Conversation renamed to "${finalTitle}"`);
+    } else {
+      state.markIdle(`Title updated in memory, but failed to persist to disk`);
+    }
+  };
+
   return {
     state,
     commands: [
@@ -490,6 +566,11 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
         label: 'Export transcript',
         description:
           'Write the current conversation to a file without clearing it',
+      },
+      {
+        id: 'rename-conversation',
+        label: 'Rename conversation',
+        description: 'Give the current chat a human-friendly title',
       },
       {
         id: 'edit-config',
@@ -531,6 +612,7 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
     listTranscripts: listSavedTranscripts,
     openTranscript,
     exportTranscript: exportCurrentTranscript,
+    renameConversation: renameCurrentConversation,
     refreshAuth,
     refreshTools,
     clearConversation: () => state.clearConversation(),
