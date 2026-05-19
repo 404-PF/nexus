@@ -1,6 +1,10 @@
 import { Box, Text } from 'ink';
 import type { ReactElement } from 'react';
-import type { ChatMessage, McpInspectorSnapshot, McpServerInspection } from '../core/types.js';
+import type {
+  ChatMessage,
+  McpInspectorSnapshot,
+  McpServerInspection,
+} from '../core/types.js';
 import type { TranscriptSummary } from './session.js';
 
 function roleLabel(role: ChatMessage['role']): string {
@@ -17,7 +21,9 @@ function roleLabel(role: ChatMessage['role']): string {
   }
 }
 
-function roleColor(role: ChatMessage['role']): 'green' | 'cyan' | 'gray' | 'magenta' {
+function roleColor(
+  role: ChatMessage['role'],
+): 'green' | 'cyan' | 'gray' | 'magenta' {
   switch (role) {
     case 'assistant':
       return 'cyan';
@@ -31,13 +37,23 @@ function roleColor(role: ChatMessage['role']): 'green' | 'cyan' | 'gray' | 'mage
   }
 }
 
-export function MessageList({ messages, streamingText }: { messages: ChatMessage[]; streamingText: string }): ReactElement {
+export function MessageList({
+  messages,
+  streamingText,
+}: {
+  messages: ChatMessage[];
+  streamingText: string;
+}): ReactElement {
   const visibleMessages = messages.slice(-12);
 
   return (
     <Box flexDirection="column" gap={1}>
       {visibleMessages.map((message, index) => (
-        <Box key={`${message.role}-${index}`} flexDirection="column" marginBottom={1}>
+        <Box
+          key={`${message.role}-${index}`}
+          flexDirection="column"
+          marginBottom={1}
+        >
           <Text color={roleColor(message.role)}>{roleLabel(message.role)}</Text>
           <Text>{message.content || '(empty)'}</Text>
         </Box>
@@ -58,7 +74,7 @@ export function StatusBar({
   model,
   authSource,
   busy,
-  error
+  error,
 }: {
   status: string;
   provider: string;
@@ -81,7 +97,9 @@ export function StatusBar({
   );
 }
 
-function statusColor(status: McpServerInspection['status']): 'green' | 'red' | 'gray' {
+function statusColor(
+  status: McpServerInspection['status'],
+): 'green' | 'red' | 'gray' {
   switch (status) {
     case 'connected':
       return 'green';
@@ -93,21 +111,39 @@ function statusColor(status: McpServerInspection['status']): 'green' | 'red' | '
   }
 }
 
-export function McpInspectorPanel({ inspector }: { inspector: McpInspectorSnapshot }): ReactElement | null {
+export function McpInspectorPanel({
+  inspector,
+}: {
+  inspector: McpInspectorSnapshot;
+}): ReactElement | null {
   if (inspector.servers.length === 0) {
     return null;
   }
 
   return (
-    <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor="blue" paddingX={1}>
+    <Box
+      flexDirection="column"
+      marginTop={1}
+      borderStyle="round"
+      borderColor="blue"
+      paddingX={1}
+    >
       <Text color="blue">MCP inspector</Text>
       <Text dimColor>MCP tools: {inspector.mcpToolCount}</Text>
       {inspector.servers.map((server) => (
         <Box key={server.name} flexDirection="column" marginTop={1}>
           <Text color={statusColor(server.status)}>
-            {server.name} [{server.transport}] - {server.status === 'error' ? 'failed' : server.status}
+            {server.name} [{server.transport}] -{' '}
+            {server.status === 'error' ? 'failed' : server.status}
           </Text>
-          {server.tools.length > 0 ? <Text dimColor>tools: {server.tools.slice(0, 5).join(', ')}{server.tools.length > 5 ? ` (+${server.tools.length - 5} more)` : ''}</Text> : null}
+          {server.tools.length > 0 ? (
+            <Text dimColor>
+              tools: {server.tools.slice(0, 5).join(', ')}
+              {server.tools.length > 5
+                ? ` (+${server.tools.length - 5} more)`
+                : ''}
+            </Text>
+          ) : null}
           {server.error ? <Text color="red">{server.error}</Text> : null}
         </Box>
       ))}
@@ -118,7 +154,7 @@ export function McpInspectorPanel({ inspector }: { inspector: McpInspectorSnapsh
 export function InputLine({
   draft,
   prompt,
-  placeholder
+  placeholder,
 }: {
   draft: string;
   prompt: string;
@@ -134,20 +170,28 @@ export function InputLine({
 
 export function CommandPalette({
   commands,
-  selectedIndex
+  selectedIndex,
 }: {
   commands: Array<{ label: string; description: string }>;
   selectedIndex: number;
 }): ReactElement {
   return (
-    <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor="blue" paddingX={1}>
+    <Box
+      flexDirection="column"
+      marginTop={1}
+      borderStyle="round"
+      borderColor="blue"
+      paddingX={1}
+    >
       <Text color="blue">Command palette</Text>
       {commands.map((command, index) => (
-        <Box key={`${command.label}-${index}`} flexDirection="column" marginTop={1}>
+        <Box
+          key={`${command.label}-${index}`}
+          flexDirection="column"
+          marginTop={1}
+        >
           <Text color={index === selectedIndex ? 'yellow' : 'white'}>
-            {index === selectedIndex ? '>' : ' '}
-            {' '}
-            {command.label}
+            {index === selectedIndex ? '>' : ' '} {command.label}
           </Text>
           <Text dimColor>{command.description}</Text>
         </Box>
@@ -164,23 +208,31 @@ function formatTranscriptStamp(isoStamp: string): string {
 
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: 'medium',
-    timeStyle: 'short'
+    timeStyle: 'short',
   }).format(date);
 }
 
 export function TranscriptBrowser({
   transcripts,
   selectedIndex,
-  loading
+  loading,
 }: {
   transcripts: TranscriptSummary[];
   selectedIndex: number;
   loading: boolean;
 }): ReactElement {
   return (
-    <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor="cyan" paddingX={1}>
+    <Box
+      flexDirection="column"
+      marginTop={1}
+      borderStyle="round"
+      borderColor="cyan"
+      paddingX={1}
+    >
       <Text color="cyan">Transcript browser</Text>
-      <Text dimColor>Use up/down and Enter to reopen a chat. Esc closes this view.</Text>
+      <Text dimColor>
+        Use up/down and Enter to reopen a chat. Esc closes this view.
+      </Text>
       {loading ? (
         <Box marginTop={1}>
           <Text>Loading transcripts...</Text>
@@ -193,9 +245,7 @@ export function TranscriptBrowser({
         transcripts.map((transcript, index) => (
           <Box key={transcript.id} flexDirection="column" marginTop={1}>
             <Text color={index === selectedIndex ? 'yellow' : 'white'}>
-              {index === selectedIndex ? '>' : ' '}
-              {' '}
-              {transcript.label}
+              {index === selectedIndex ? '>' : ' '} {transcript.label}
               {transcript.isCurrent ? ' (current)' : ''}
             </Text>
             <Text dimColor>

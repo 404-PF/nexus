@@ -1,5 +1,14 @@
-import type { ChatMessage, ProviderKind, ToolCall, ToolSpec } from '../core/types.js';
-import type { LLMClient, ProviderCompletionRequest, ProviderCompletionResult } from './types.js';
+import type {
+  ChatMessage,
+  ProviderKind,
+  ToolCall,
+  ToolSpec,
+} from '../core/types.js';
+import type {
+  LLMClient,
+  ProviderCompletionRequest,
+  ProviderCompletionResult,
+} from './types.js';
 
 type OpenAIToolCallDelta = {
   index: number;
@@ -33,7 +42,10 @@ function safeJsonParse(input: string): unknown {
   }
 }
 
-async function readSseStream(response: Response, onEvent: (event: string, data: string) => void): Promise<void> {
+async function readSseStream(
+  response: Response,
+  onEvent: (event: string, data: string) => void,
+): Promise<void> {
   const reader = response.body?.getReader();
   if (!reader) {
     return;
@@ -91,7 +103,9 @@ async function readSseStream(response: Response, onEvent: (event: string, data: 
   }
 }
 
-function toOpenAIMessages(messages: ChatMessage[]): Array<Record<string, unknown>> {
+function toOpenAIMessages(
+  messages: ChatMessage[],
+): Array<Record<string, unknown>> {
   const payload: Array<Record<string, unknown>> = [];
 
   for (const message of messages) {
@@ -99,7 +113,7 @@ function toOpenAIMessages(messages: ChatMessage[]): Array<Record<string, unknown
       payload.push({
         role: 'tool',
         tool_call_id: message.toolCallId ?? message.name ?? 'tool',
-        content: message.content
+        content: message.content,
       });
       continue;
     }
@@ -110,14 +124,14 @@ function toOpenAIMessages(messages: ChatMessage[]): Array<Record<string, unknown
         type: 'function',
         function: {
           name: call.name,
-          arguments: JSON.stringify(call.arguments ?? {})
-        }
+          arguments: JSON.stringify(call.arguments ?? {}),
+        },
       }));
 
       payload.push({
         role: 'assistant',
         ...(message.content ? { content: message.content } : {}),
-        tool_calls: toolCalls
+        tool_calls: toolCalls,
       });
       continue;
     }
@@ -125,7 +139,7 @@ function toOpenAIMessages(messages: ChatMessage[]): Array<Record<string, unknown
     payload.push({
       role: message.role,
       content: message.content,
-      ...(message.name ? { name: message.name } : {})
+      ...(message.name ? { name: message.name } : {}),
     });
   }
 
@@ -138,18 +152,20 @@ function toOpenAITools(tools: ToolSpec[]): Array<Record<string, unknown>> {
     function: {
       name: tool.name,
       description: tool.description,
-      parameters: tool.inputSchema
-    }
+      parameters: tool.inputSchema,
+    },
   }));
 }
 
-function buildToolCalls(accumulators: Map<number, OpenAIToolCallAccumulator>): ToolCall[] {
+function buildToolCalls(
+  accumulators: Map<number, OpenAIToolCallAccumulator>,
+): ToolCall[] {
   return [...accumulators.entries()]
     .sort(([left], [right]) => left - right)
     .map(([, accumulator], index) => ({
       id: accumulator.id ?? `tool-${index}`,
       name: accumulator.name ?? 'unknown-tool',
-      arguments: safeJsonParse(accumulator.arguments)
+      arguments: safeJsonParse(accumulator.arguments),
     }));
 }
 
@@ -182,23 +198,27 @@ export class OpenAICompatibleClient implements LLMClient {
     this.maxTokens = options.maxTokens;
   }
 
-  public async complete(request: ProviderCompletionRequest): Promise<ProviderCompletionResult> {
+  public async complete(
+    request: ProviderCompletionRequest,
+  ): Promise<ProviderCompletionResult> {
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
       ...(request.signal ? { signal: request.signal } : {}),
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         model: this.model,
         messages: toOpenAIMessages(request.messages),
         tools: toOpenAITools(request.tools),
         ...(request.tools.length > 0 ? { tool_choice: 'auto' } : {}),
-        ...(this.temperature !== undefined ? { temperature: this.temperature } : {}),
+        ...(this.temperature !== undefined
+          ? { temperature: this.temperature }
+          : {}),
         ...(this.maxTokens !== undefined ? { max_tokens: this.maxTokens } : {}),
-        stream: true
-      })
+        stream: true,
+      }),
     });
 
     if (!response.ok) {
@@ -236,7 +256,7 @@ export class OpenAICompatibleClient implements LLMClient {
         const accumulator = toolCalls.get(call.index) ?? {
           id: undefined,
           name: undefined,
-          arguments: ''
+          arguments: '',
         };
 
         if (!accumulator.id) {
@@ -257,10 +277,10 @@ export class OpenAICompatibleClient implements LLMClient {
       message: {
         role: 'assistant',
         content: text.trimEnd(),
-        ...(finalToolCalls.length > 0 ? { toolCalls: finalToolCalls } : {})
+        ...(finalToolCalls.length > 0 ? { toolCalls: finalToolCalls } : {}),
       },
       toolCalls: finalToolCalls,
-      raw: { text }
+      raw: { text },
     };
   }
 }

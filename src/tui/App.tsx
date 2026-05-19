@@ -3,7 +3,14 @@ import type { ReactElement } from 'react';
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import type { TuiSession, TranscriptSummary } from './session.js';
 import { CommandAction } from './session.js';
-import { CommandPalette, InputLine, MessageList, McpInspectorPanel, StatusBar, TranscriptBrowser } from './StreamingRenderer.js';
+import {
+  CommandPalette,
+  InputLine,
+  MessageList,
+  McpInspectorPanel,
+  StatusBar,
+  TranscriptBrowser,
+} from './StreamingRenderer.js';
 
 function createDefaultTranscriptExportName(): string {
   return `transcript-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
@@ -11,8 +18,14 @@ function createDefaultTranscriptExportName(): string {
 
 export function App({ session }: { session: TuiSession }): ReactElement {
   const { exit } = useApp();
-  const subscribe = useMemo(() => session.state.subscribe.bind(session.state), [session.state]);
-  const getSnapshot = useMemo(() => session.state.getSnapshot.bind(session.state), [session.state]);
+  const subscribe = useMemo(
+    () => session.state.subscribe.bind(session.state),
+    [session.state],
+  );
+  const getSnapshot = useMemo(
+    () => session.state.getSnapshot.bind(session.state),
+    [session.state],
+  );
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   const [draft, setDraft] = useState('');
   const [exportDraft, setExportDraft] = useState('');
@@ -20,7 +33,8 @@ export function App({ session }: { session: TuiSession }): ReactElement {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteIndex, setPaletteIndex] = useState(0);
   const [transcriptBrowserOpen, setTranscriptBrowserOpen] = useState(false);
-  const [transcriptBrowserLoading, setTranscriptBrowserLoading] = useState(false);
+  const [transcriptBrowserLoading, setTranscriptBrowserLoading] =
+    useState(false);
   const [transcriptBrowserIndex, setTranscriptBrowserIndex] = useState(0);
   const [transcripts, setTranscripts] = useState<TranscriptSummary[]>([]);
 
@@ -51,7 +65,9 @@ export function App({ session }: { session: TuiSession }): ReactElement {
         setTranscriptBrowserIndex(0);
       } catch (error) {
         if (!cancelled) {
-          session.state.setError(`Failed to load transcripts: ${error instanceof Error ? error.message : String(error)}`);
+          session.state.setError(
+            `Failed to load transcripts: ${error instanceof Error ? error.message : String(error)}`,
+          );
           setTranscriptBrowserOpen(false);
         }
       } finally {
@@ -67,7 +83,10 @@ export function App({ session }: { session: TuiSession }): ReactElement {
   }, [session, transcriptBrowserOpen]);
 
   useEffect(() => {
-    if (transcriptBrowserIndex < 0 || transcriptBrowserIndex >= transcripts.length) {
+    if (
+      transcriptBrowserIndex < 0 ||
+      transcriptBrowserIndex >= transcripts.length
+    ) {
       setTranscriptBrowserIndex(0);
     }
   }, [transcriptBrowserIndex, transcripts.length]);
@@ -136,7 +155,9 @@ export function App({ session }: { session: TuiSession }): ReactElement {
       }
 
       if (key.downArrow) {
-        setTranscriptBrowserIndex((value) => Math.min(transcripts.length - 1, value + 1));
+        setTranscriptBrowserIndex((value) =>
+          Math.min(transcripts.length - 1, value + 1),
+        );
         return;
       }
 
@@ -227,7 +248,10 @@ export function App({ session }: { session: TuiSession }): ReactElement {
 
   return (
     <>
-      <MessageList messages={snapshot.messages} streamingText={snapshot.streamingText} />
+      <MessageList
+        messages={snapshot.messages}
+        streamingText={snapshot.streamingText}
+      />
       <StatusBar
         status={snapshot.status}
         provider={snapshot.config.provider.kind}
@@ -246,7 +270,9 @@ export function App({ session }: { session: TuiSession }): ReactElement {
             : 'Type a message. Ctrl+K opens the command palette.'
         }
       />
-      {paletteOpen ? <CommandPalette commands={commands} selectedIndex={paletteIndex} /> : null}
+      {paletteOpen ? (
+        <CommandPalette commands={commands} selectedIndex={paletteIndex} />
+      ) : null}
       {transcriptBrowserOpen ? (
         <TranscriptBrowser
           transcripts={transcripts}

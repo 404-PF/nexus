@@ -7,14 +7,17 @@ import { OpenAICompatibleClient } from './openai-compatible.js';
 
 const openAIBaseUrl = 'https://api.openai.com/v1';
 
-export async function createProviderClient(config: AppConfig): Promise<{ client: LLMClient; secretSource: 'env' | 'keychain' | 'file' }> {
+export async function createProviderClient(
+  config: AppConfig,
+): Promise<{ client: LLMClient; secretSource: 'env' | 'keychain' | 'file' }> {
   const definition = getProviderDefinition(config.provider.kind);
   const secret = await resolveProviderSecret(config.provider.kind);
   if (!secret) {
     throw new Error(getProviderAuthMessage(config.provider.kind));
   }
 
-  const baseUrl = config.provider.baseUrl ?? definition.defaultBaseUrl ?? openAIBaseUrl;
+  const baseUrl =
+    config.provider.baseUrl ?? definition.defaultBaseUrl ?? openAIBaseUrl;
 
   if (definition.clientKind === 'anthropic') {
     return {
@@ -23,9 +26,9 @@ export async function createProviderClient(config: AppConfig): Promise<{ client:
         baseUrl,
         apiKey: secret.apiKey,
         temperature: config.provider.temperature,
-        maxTokens: config.provider.maxTokens
+        maxTokens: config.provider.maxTokens,
       }),
-      secretSource: secret.source
+      secretSource: secret.source,
     };
   }
 
@@ -36,8 +39,8 @@ export async function createProviderClient(config: AppConfig): Promise<{ client:
       baseUrl,
       apiKey: secret.apiKey,
       temperature: config.provider.temperature,
-      maxTokens: config.provider.maxTokens
+      maxTokens: config.provider.maxTokens,
     }),
-    secretSource: secret.source
+    secretSource: secret.source,
   };
 }

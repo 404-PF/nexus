@@ -3,7 +3,7 @@ import type {
   McpInspectorSnapshot,
   ToolExecutionContext,
   ToolResult,
-  ToolSpec
+  ToolSpec,
 } from '../core/types.js';
 import { resolveNativeTools } from './nativeTools.js';
 import { McpBridge } from './mcpBridge.js';
@@ -22,13 +22,13 @@ export class ToolRegistry {
 
   private mcpInspector: McpInspectorSnapshot = {
     mcpToolCount: 0,
-    servers: []
+    servers: [],
   };
 
   public constructor(private readonly config: AppConfig) {
     this.nativeTools = resolveNativeTools(config.tools.native).map((tool) => ({
       spec: tool.spec,
-      execute: tool.execute
+      execute: tool.execute,
     }));
   }
 
@@ -38,7 +38,8 @@ export class ToolRegistry {
     this.mcpInspector = result.inspector;
     this.mcpTools = specs.map((spec) => ({
       spec,
-      execute: (input, context) => this.mcpBridge.invoke(spec.name, input, context)
+      execute: (input, context) =>
+        this.mcpBridge.invoke(spec.name, input, context),
     }));
   }
 
@@ -50,8 +51,14 @@ export class ToolRegistry {
     return [...this.nativeTools, ...this.mcpTools].map((tool) => tool.spec);
   }
 
-  public async invoke(name: string, input: unknown, context: ToolExecutionContext): Promise<ToolResult> {
-    const candidate = [...this.nativeTools, ...this.mcpTools].find((tool) => tool.spec.name === name);
+  public async invoke(
+    name: string,
+    input: unknown,
+    context: ToolExecutionContext,
+  ): Promise<ToolResult> {
+    const candidate = [...this.nativeTools, ...this.mcpTools].find(
+      (tool) => tool.spec.name === name,
+    );
     if (!candidate) {
       throw new Error(`Unknown tool: ${name}`);
     }

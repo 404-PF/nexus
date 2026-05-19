@@ -1,6 +1,6 @@
-import { mkdir, readFile, writeFile } from 'fs/promises';
+import { mkdir, readFile, writeFile, access } from 'fs/promises';
 import { homedir } from 'os';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import YAML from 'yaml';
 import type { AppConfig } from '../core/types.js';
 import { createDefaultConfig, parseConfig } from './schema.js';
@@ -33,4 +33,32 @@ export async function saveConfig(config: AppConfig): Promise<void> {
 
 export async function loadOrCreateConfig(): Promise<AppConfig> {
   return (await loadConfig()) ?? createDefaultConfig();
+}
+
+export async function exportConfig(exportPath: string): Promise<void> {
+  const config = await loadConfig();
+  if (!config) {
+    throw new Error('No config found to export. Run setup first.');
+  }
+
+  const absolutePath = resolve(exportPath);
+  const dir = join(absolutePath, '..');
+  await mkdir(dir, { recursive: true });
+
+  const output = YAML.stringify(config, { indent: 2 });
+  await writeFile(absolutePath, output, { encoding: 'utf8' });
+}
+
+export async function importConfig(importPath: string): Promise<void> {
+  const absolutePath = resolve(importPath);
+
+  try {
+    await access(absolutePath);
+  } catch {
+    throw new Error(`Config file not found: ${absolutePath}`);
+  }
+
+  const raw = await readFile(absolutePath, 'utf8');
+  const config = parseConfig(YAML.parse(raw));
+  await saveConfig(config);
 }

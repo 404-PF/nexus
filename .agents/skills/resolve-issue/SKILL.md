@@ -1,6 +1,6 @@
 ---
 name: resolve-issue
-description: "Use when a user wants to investigate, reproduce, fix, and validate a bug or issue in the workspace."
+description: 'Use when a user wants to investigate, reproduce, fix, and validate a bug or issue in the workspace.'
 ---
 
 # Resolve Issue

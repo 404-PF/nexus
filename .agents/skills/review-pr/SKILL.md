@@ -1,6 +1,6 @@
 ---
 name: review-pr
-description: "Use when reviewing a pull request, assessing a diff, or giving code review feedback on a change."
+description: 'Use when reviewing a pull request, assessing a diff, or giving code review feedback on a change.'
 ---
 
 # Review Pull Request

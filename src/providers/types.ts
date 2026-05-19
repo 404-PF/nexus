@@ -1,4 +1,9 @@
-import type { ChatMessage, ProviderKind, ToolCall, ToolSpec } from '../core/types.js';
+import type {
+  ChatMessage,
+  ProviderKind,
+  ToolCall,
+  ToolSpec,
+} from '../core/types.js';
 
 export interface ProviderCompletionRequest {
   messages: ChatMessage[];
@@ -16,6 +21,8 @@ export interface ProviderCompletionResult {
 export interface LLMClient {
   readonly provider: ProviderKind;
   readonly model: string;
-  complete(request: ProviderCompletionRequest): Promise<ProviderCompletionResult>;
+  complete(
+    request: ProviderCompletionRequest,
+  ): Promise<ProviderCompletionResult>;
   close?(): Promise<void>;
 }

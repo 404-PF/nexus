@@ -25,7 +25,9 @@ export class AgentStateManager {
 
   private readonly listeners = new Set<StateListener>();
 
-  private readonly onConversationChange: ((messages: ChatMessage[]) => void | Promise<void>) | undefined;
+  private readonly onConversationChange:
+    | ((messages: ChatMessage[]) => void | Promise<void>)
+    | undefined;
 
   public constructor(config: AppConfig, options: AgentStateOptions = {}) {
     this.onConversationChange = options.onConversationChange;
@@ -39,8 +41,8 @@ export class AgentStateManager {
       error: undefined,
       mcpInspector: {
         mcpToolCount: 0,
-        servers: []
-      }
+        servers: [],
+      },
     };
   }
 
@@ -164,7 +166,7 @@ export class AgentStateManager {
     const nextSnapshot: AgentStateSnapshot = {
       ...this.snapshotValue,
       messages: [...this.snapshotValue.messages],
-      mcpInspector: structuredClone(this.snapshotValue.mcpInspector)
+      mcpInspector: structuredClone(this.snapshotValue.mcpInspector),
     };
     mutator(nextSnapshot);
     this.snapshotValue = nextSnapshot;
@@ -178,6 +180,8 @@ export class AgentStateManager {
       return;
     }
 
-    void this.onConversationChange(structuredClone(this.snapshotValue.messages));
+    void this.onConversationChange(
+      structuredClone(this.snapshotValue.messages),
+    );
   }
 }

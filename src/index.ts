@@ -12,7 +12,7 @@ try {
     existingConfig = null;
   } else {
     console.warn(
-      `Unable to read existing config; opening setup with defaults: ${error instanceof Error ? error.message : String(error)}`
+      `Unable to read existing config; opening setup with defaults: ${error instanceof Error ? error.message : String(error)}`,
     );
     existingConfig = null;
   }

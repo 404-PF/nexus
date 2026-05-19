@@ -11,7 +11,7 @@ import {
   listTranscripts as loadSavedTranscripts,
   loadTranscript,
   loadTranscriptById,
-  saveTranscript
+  saveTranscript,
 } from '../core/transcript-store.js';
 import { createProviderClient } from '../providers/index.js';
 import { ToolRegistry } from '../tools/registry.js';
@@ -39,13 +39,18 @@ function messagesMatch(left: ChatMessage[], right: ChatMessage[]): boolean {
       return false;
     }
 
-    for (let toolCallIndex = 0; toolCallIndex < leftToolCalls.length; toolCallIndex += 1) {
+    for (
+      let toolCallIndex = 0;
+      toolCallIndex < leftToolCalls.length;
+      toolCallIndex += 1
+    ) {
       const leftToolCall = leftToolCalls[toolCallIndex]!;
       const rightToolCall = rightToolCalls[toolCallIndex]!;
       if (
         leftToolCall.id !== rightToolCall.id ||
         leftToolCall.name !== rightToolCall.name ||
-        JSON.stringify(leftToolCall.arguments) !== JSON.stringify(rightToolCall.arguments)
+        JSON.stringify(leftToolCall.arguments) !==
+          JSON.stringify(rightToolCall.arguments)
       ) {
         return false;
       }
@@ -63,7 +68,7 @@ export interface TuiCommand {
 
 export enum CommandAction {
   BrowseTranscripts = 'browse-transcripts',
-  ExportTranscript = 'export-transcript'
+  ExportTranscript = 'export-transcript',
 }
 
 export interface TuiSession {
@@ -121,7 +126,9 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
     await transcriptArchiveQueue.catch(() => undefined);
   };
 
-  const archiveConversation = async (messages: ChatMessage[]): Promise<void> => {
+  const archiveConversation = async (
+    messages: ChatMessage[],
+  ): Promise<void> => {
     transcriptArchiveQueue = transcriptArchiveQueue
       .catch(() => undefined)
       .then(async () => {
@@ -134,7 +141,7 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
 
   const state = new AgentStateManager(config, {
     initialMessages,
-    onConversationChange: persistConversation
+    onConversationChange: persistConversation,
   });
   const initialProvider = await createProviderClient(activeConfig);
   let provider = initialProvider.client;
@@ -148,9 +155,13 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
   let refreshPromise: Promise<void> | null = null;
 
   const launchConfigEditor = (): boolean => {
-    const result = spawnSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'setup'], {
-      stdio: 'inherit'
-    });
+    const result = spawnSync(
+      process.platform === 'win32' ? 'npm.cmd' : 'npm',
+      ['run', 'setup'],
+      {
+        stdio: 'inherit',
+      },
+    );
 
     if (result.error) {
       state.setError(`Failed to launch config editor: ${result.error.message}`);
@@ -158,7 +169,9 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
     }
 
     if (result.status !== 0) {
-      state.setError(`Config editor exited with code ${result.status ?? 'unknown'}`);
+      state.setError(
+        `Config editor exited with code ${result.status ?? 'unknown'}`,
+      );
       return false;
     }
 
@@ -166,17 +179,25 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
   };
 
   const launchProviderSwitcher = (): boolean => {
-    const result = spawnSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'setup', '--', '--provider'], {
-      stdio: 'inherit'
-    });
+    const result = spawnSync(
+      process.platform === 'win32' ? 'npm.cmd' : 'npm',
+      ['run', 'setup', '--', '--provider'],
+      {
+        stdio: 'inherit',
+      },
+    );
 
     if (result.error) {
-      state.setError(`Failed to launch provider switcher: ${result.error.message}`);
+      state.setError(
+        `Failed to launch provider switcher: ${result.error.message}`,
+      );
       return false;
     }
 
     if (result.status !== 0) {
-      state.setError(`Provider switcher exited with code ${result.status ?? 'unknown'}`);
+      state.setError(
+        `Provider switcher exited with code ${result.status ?? 'unknown'}`,
+      );
       return false;
     }
 
@@ -208,7 +229,9 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
       await reloadProvider(activeConfig);
       state.markIdle('Provider credentials refreshed');
     } catch (error) {
-      state.setError(`Failed to refresh provider credentials: ${error instanceof Error ? error.message : String(error)}`);
+      state.setError(
+        `Failed to refresh provider credentials: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   };
 
@@ -232,7 +255,9 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
       try {
         const reloadedConfig = await loadConfig();
         if (!reloadedConfig) {
-          throw new Error('No config file found. Run setup before refreshing MCP tools.');
+          throw new Error(
+            'No config file found. Run setup before refreshing MCP tools.',
+          );
         }
 
         const nextConfig = reloadedConfig;
@@ -258,7 +283,9 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
         if (nextTools) {
           await nextTools.dispose();
         }
-        state.setError(`Failed to refresh MCP tools: ${error instanceof Error ? error.message : String(error)}`);
+        state.setError(
+          `Failed to refresh MCP tools: ${error instanceof Error ? error.message : String(error)}`,
+        );
       } finally {
         refreshInProgress = false;
         refreshPromise = null;
@@ -284,7 +311,7 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
           state,
           provider,
           tools,
-          signal: activeController.signal
+          signal: activeController.signal,
         },
         prompt.trim(),
       );
@@ -314,7 +341,9 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
       state.clearConversation();
       state.setMcpInspector(tools.getMcpInspector());
     } catch (error) {
-      state.setError(`Failed to start a new chat: ${error instanceof Error ? error.message : String(error)}`);
+      state.setError(
+        `Failed to start a new chat: ${error instanceof Error ? error.message : String(error)}`,
+      );
     } finally {
       if (state.getSnapshot().isBusy) {
         state.markIdle();
@@ -335,13 +364,19 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
       await waitForTranscriptArchives();
       const messages = await loadTranscriptById(transcriptId);
       const currentMessages = state.getSnapshot().messages;
-      if (transcriptId !== 'current' && currentMessages.length > 0 && !messagesMatch(currentMessages, messages)) {
+      if (
+        transcriptId !== 'current' &&
+        currentMessages.length > 0 &&
+        !messagesMatch(currentMessages, messages)
+      ) {
         await archiveConversation(currentMessages);
       }
 
       state.replaceConversation(messages);
     } catch (error) {
-      state.setError(`Failed to open transcript: ${error instanceof Error ? error.message : String(error)}`);
+      state.setError(
+        `Failed to open transcript: ${error instanceof Error ? error.message : String(error)}`,
+      );
     } finally {
       if (state.getSnapshot().isBusy) {
         state.markIdle();
@@ -369,7 +404,9 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
       await exportTranscript(state.getSnapshot().messages, trimmedPath);
       state.markIdle(`Exported transcript to ${trimmedPath}`);
     } catch (error) {
-      state.setError(`Failed to export transcript: ${error instanceof Error ? error.message : String(error)}`);
+      state.setError(
+        `Failed to export transcript: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     } finally {
       if (state.getSnapshot().isBusy) {
@@ -384,7 +421,9 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
     return loadSavedTranscripts();
   };
 
-  const executeCommand = async (commandId: string): Promise<CommandAction | undefined> => {
+  const executeCommand = async (
+    commandId: string,
+  ): Promise<CommandAction | undefined> => {
     switch (commandId) {
       case 'new-chat':
         await startNewChat();
@@ -407,7 +446,9 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
         break;
       case 'switch-provider-model':
         if (state.getSnapshot().isBusy) {
-          state.setStatus('Finish the active turn before switching provider or model');
+          state.setStatus(
+            'Finish the active turn before switching provider or model',
+          );
           break;
         }
 
@@ -437,48 +478,53 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
       {
         id: 'new-chat',
         label: 'New chat',
-        description: 'Archive the current conversation and start a clean chat'
+        description: 'Archive the current conversation and start a clean chat',
       },
       {
         id: 'browse-transcripts',
         label: 'Browse transcripts',
-        description: 'View saved chats and reopen one without deleting it'
+        description: 'View saved chats and reopen one without deleting it',
       },
       {
         id: 'export-transcript',
         label: 'Export transcript',
-        description: 'Write the current conversation to a file without clearing it'
+        description:
+          'Write the current conversation to a file without clearing it',
       },
       {
         id: 'edit-config',
         label: 'Edit config',
-        description: 'Open the configuration editor and reload settings after saving'
+        description:
+          'Open the configuration editor and reload settings after saving',
       },
       {
         id: 'switch-provider-model',
         label: 'Switch provider/model',
-        description: 'Change the active provider or model, then reload the live client and tools'
+        description:
+          'Change the active provider or model, then reload the live client and tools',
       },
       {
         id: 'refresh-auth',
         label: 'Refresh auth',
-        description: 'Re-read the active provider credentials from env, keychain, or vault'
+        description:
+          'Re-read the active provider credentials from env, keychain, or vault',
       },
       {
         id: 'refresh-tools',
         label: 'Refresh tools',
-        description: 'Reload config, refresh MCP servers and tools, re-resolve provider auth, and update the inspector'
+        description:
+          'Reload config, refresh MCP servers and tools, re-resolve provider auth, and update the inspector',
       },
       {
         id: 'abort',
         label: 'Abort turn',
-        description: 'Stop the active provider or tool request'
+        description: 'Stop the active provider or tool request',
       },
       {
         id: 'quit',
         label: 'Quit',
-        description: 'Exit the terminal UI'
-      }
+        description: 'Exit the terminal UI',
+      },
     ],
     submitPrompt,
     startNewChat,
@@ -496,6 +542,6 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
       await refreshPromise?.catch(() => undefined);
       await tools.dispose();
       await provider.close?.();
-    }
+    },
   };
 }

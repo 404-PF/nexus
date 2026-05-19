@@ -25,28 +25,42 @@ function formatError(error: unknown): string {
   return String(error);
 }
 
-function buildConversation(systemPrompt: string, messages: ChatMessage[]): ChatMessage[] {
+function buildConversation(
+  systemPrompt: string,
+  messages: ChatMessage[],
+): ChatMessage[] {
   return [{ role: 'system', content: systemPrompt }, ...messages];
 }
 
-function toolResultMessage(toolCall: ToolCall, result: ToolResult): ChatMessage {
+function toolResultMessage(
+  toolCall: ToolCall,
+  result: ToolResult,
+): ChatMessage {
   return {
     role: 'tool',
     content: result.content,
     name: toolCall.name,
-    toolCallId: toolCall.id
+    toolCallId: toolCall.id,
   };
 }
 
-export async function runAgentLoop(dependencies: AgentLoopDependencies, userPrompt: string): Promise<AgentLoopResult> {
+export async function runAgentLoop(
+  dependencies: AgentLoopDependencies,
+  userPrompt: string,
+): Promise<AgentLoopResult> {
   const { config, state, provider, tools, signal } = dependencies;
   const maxRounds = dependencies.maxRounds ?? 6;
   const toolCalls: ToolCall[] = [];
 
   state.appendMessage({ role: 'user', content: userPrompt });
-  state.markBusy(`Thinking with ${config.provider.kind}/${config.provider.model}`);
+  state.markBusy(
+    `Thinking with ${config.provider.kind}/${config.provider.model}`,
+  );
 
-  let conversation = buildConversation(config.systemPrompt, state.getSnapshot().messages);
+  let conversation = buildConversation(
+    config.systemPrompt,
+    state.getSnapshot().messages,
+  );
 
   try {
     for (let round = 0; round < maxRounds; round += 1) {
@@ -59,18 +73,20 @@ export async function runAgentLoop(dependencies: AgentLoopDependencies, userProm
         signal,
         onToken: (token) => {
           state.appendStreamingText(token);
-        }
+        },
       });
 
       state.clearStreamingText();
       state.appendMessage(completion.message);
-      conversation = buildConversation(config.systemPrompt, [...state.getSnapshot().messages]);
+      conversation = buildConversation(config.systemPrompt, [
+        ...state.getSnapshot().messages,
+      ]);
 
       if (completion.toolCalls.length === 0) {
         state.markIdle('Idle');
         return {
           finalMessage: completion.message,
-          toolCalls
+          toolCalls,
         };
       }
 
@@ -83,10 +99,12 @@ export async function runAgentLoop(dependencies: AgentLoopDependencies, userProm
         state.setStatus(`Running tool ${call.name}`);
         const result = await tools.invoke(call.name, call.arguments, {
           config,
-          ...(signal ? { signal } : {})
+          ...(signal ? { signal } : {}),
         });
         state.appendMessage(toolResultMessage(call, result));
-        conversation = buildConversation(config.systemPrompt, [...state.getSnapshot().messages]);
+        conversation = buildConversation(config.systemPrompt, [
+          ...state.getSnapshot().messages,
+        ]);
       }
     }
 
