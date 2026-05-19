@@ -1,4 +1,8 @@
-import type { ToolExecutionContext, ToolResult, ToolSpec } from '../core/types.js';
+import type {
+  ToolExecutionContext,
+  ToolResult,
+  ToolSpec,
+} from '../core/types.js';
 
 export interface NativeToolDefinition {
   spec: ToolSpec;
@@ -17,14 +21,14 @@ export const nativeToolCatalog: Record<string, NativeToolDefinition> = {
       inputSchema: {
         type: 'object',
         properties: {},
-        additionalProperties: false
-      }
+        additionalProperties: false,
+      },
     },
     async execute() {
       return {
-        content: new Date().toISOString()
+        content: new Date().toISOString(),
       };
-    }
+    },
   },
   'agent.config': {
     spec: {
@@ -33,8 +37,8 @@ export const nativeToolCatalog: Record<string, NativeToolDefinition> = {
       inputSchema: {
         type: 'object',
         properties: {},
-        additionalProperties: false
-      }
+        additionalProperties: false,
+      },
     },
     async execute(_input, context) {
       const summary = {
@@ -43,14 +47,14 @@ export const nativeToolCatalog: Record<string, NativeToolDefinition> = {
         mcpServers: context.config.tools.mcpServers.map((server) => ({
           name: server.name,
           transport: server.transport,
-          enabled: server.enabled ?? true
-        }))
+          enabled: server.enabled ?? true,
+        })),
       };
 
       return {
-        content: stringifyJson(summary)
+        content: stringifyJson(summary),
       };
-    }
+    },
   },
   'agent.echo': {
     spec: {
@@ -60,20 +64,23 @@ export const nativeToolCatalog: Record<string, NativeToolDefinition> = {
         type: 'object',
         properties: {
           text: {
-            type: 'string'
-          }
+            type: 'string',
+          },
         },
         required: ['text'],
-        additionalProperties: false
-      }
+        additionalProperties: false,
+      },
     },
     async execute(input) {
-      const value = input && typeof input === 'object' ? (input as { text?: unknown }).text : undefined;
+      const value =
+        input && typeof input === 'object'
+          ? (input as { text?: unknown }).text
+          : undefined;
       return {
-        content: typeof value === 'string' ? value : ''
+        content: typeof value === 'string' ? value : '',
       };
-    }
-  }
+    },
+  },
 };
 
 export function resolveNativeTools(enabled: string[]): NativeToolDefinition[] {

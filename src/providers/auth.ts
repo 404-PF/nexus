@@ -11,12 +11,18 @@ export interface ProviderSecret {
 
 interface KeyVaultRecord {
   version: 1;
-  providers: Partial<Record<ProviderKind, { apiKey: string; updatedAt: string }>>;
+  providers: Partial<
+    Record<ProviderKind, { apiKey: string; updatedAt: string }>
+  >;
 }
 
 interface KeytarLike {
   getPassword(service: string, account: string): Promise<string | null>;
-  setPassword(service: string, account: string, password: string): Promise<void>;
+  setPassword(
+    service: string,
+    account: string,
+    password: string,
+  ): Promise<void>;
 }
 
 const serviceName = 'nexus-agi';
@@ -40,13 +46,13 @@ async function readVault(): Promise<KeyVaultRecord> {
     const parsed = JSON.parse(raw) as Partial<KeyVaultRecord>;
     return {
       version: 1,
-      providers: parsed.providers ?? {}
+      providers: parsed.providers ?? {},
     };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return {
         version: 1,
-        providers: {}
+        providers: {},
       };
     }
 
@@ -58,17 +64,19 @@ async function writeVault(vault: KeyVaultRecord): Promise<void> {
   await ensureVaultDir();
   await writeFile(keyVaultPath, `${JSON.stringify(vault, null, 2)}\n`, {
     encoding: 'utf8',
-    mode: 0o600
+    mode: 0o600,
   });
 }
 
-export async function resolveProviderSecret(provider: ProviderKind): Promise<ProviderSecret | null> {
+export async function resolveProviderSecret(
+  provider: ProviderKind,
+): Promise<ProviderSecret | null> {
   for (const envVar of getProviderSecretEnvVars(provider)) {
     const value = process.env[envVar]?.trim();
     if (value) {
       return {
         apiKey: value,
-        source: 'env'
+        source: 'env',
       };
     }
   }
@@ -79,7 +87,7 @@ export async function resolveProviderSecret(provider: ProviderKind): Promise<Pro
     if (value) {
       return {
         apiKey: value,
-        source: 'keychain'
+        source: 'keychain',
       };
     }
   }
@@ -89,14 +97,17 @@ export async function resolveProviderSecret(provider: ProviderKind): Promise<Pro
   if (entry) {
     return {
       apiKey: entry.apiKey,
-      source: 'file'
+      source: 'file',
     };
   }
 
   return null;
 }
 
-export async function storeProviderApiKey(provider: ProviderKind, apiKey: string): Promise<void> {
+export async function storeProviderApiKey(
+  provider: ProviderKind,
+  apiKey: string,
+): Promise<void> {
   const keytar = await loadKeytar();
   if (keytar) {
     try {
@@ -110,7 +121,7 @@ export async function storeProviderApiKey(provider: ProviderKind, apiKey: string
   const vault = await readVault();
   vault.providers[provider] = {
     apiKey,
-    updatedAt: new Date().toISOString()
+    updatedAt: new Date().toISOString(),
   };
   await writeVault(vault);
 }

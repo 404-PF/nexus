@@ -1,5 +1,14 @@
-import type { ChatMessage, ProviderKind, ToolCall, ToolSpec } from '../core/types.js';
-import type { LLMClient, ProviderCompletionRequest, ProviderCompletionResult } from './types.js';
+import type {
+  ChatMessage,
+  ProviderKind,
+  ToolCall,
+  ToolSpec,
+} from '../core/types.js';
+import type {
+  LLMClient,
+  ProviderCompletionRequest,
+  ProviderCompletionResult,
+} from './types.js';
 
 interface AnthropicToolCallAccumulator {
   id: string;
@@ -23,7 +32,10 @@ function safeJsonParse(input: string): unknown {
   }
 }
 
-async function readSseStream(response: Response, onEvent: (event: string, data: string) => void): Promise<void> {
+async function readSseStream(
+  response: Response,
+  onEvent: (event: string, data: string) => void,
+): Promise<void> {
   const reader = response.body?.getReader();
   if (!reader) {
     return;
@@ -102,9 +114,9 @@ function toAnthropicMessages(messages: ChatMessage[]): {
             type: 'tool_result',
             tool_use_id: message.toolCallId ?? message.name ?? 'tool',
             content: message.content,
-            is_error: false
-          }
-        ]
+            is_error: false,
+          },
+        ],
       });
       continue;
     }
@@ -114,7 +126,7 @@ function toAnthropicMessages(messages: ChatMessage[]): {
       if (message.content.trim()) {
         contentBlocks.push({
           type: 'text',
-          text: message.content
+          text: message.content,
         });
       }
 
@@ -123,26 +135,28 @@ function toAnthropicMessages(messages: ChatMessage[]): {
           type: 'tool_use',
           id: call.id,
           name: call.name,
-          input: call.arguments ?? {}
+          input: call.arguments ?? {},
         });
       }
 
       payload.push({
         role: 'assistant',
-        content: contentBlocks
+        content: contentBlocks,
       });
       continue;
     }
 
     payload.push({
       role: message.role,
-      content: message.content
+      content: message.content,
     });
   }
 
   return {
-    ...(systemMessages.length > 0 ? { system: systemMessages.join('\n\n') } : {}),
-    messages: payload
+    ...(systemMessages.length > 0
+      ? { system: systemMessages.join('\n\n') }
+      : {}),
+    messages: payload,
   };
 }
 
@@ -150,15 +164,17 @@ function toAnthropicTools(tools: ToolSpec[]): Array<Record<string, unknown>> {
   return tools.map((tool) => ({
     name: tool.name,
     description: tool.description,
-    input_schema: tool.inputSchema
+    input_schema: tool.inputSchema,
   }));
 }
 
-function buildToolCalls(accumulators: AnthropicToolCallAccumulator[]): ToolCall[] {
+function buildToolCalls(
+  accumulators: AnthropicToolCallAccumulator[],
+): ToolCall[] {
   return accumulators.map((accumulator) => ({
     id: accumulator.id,
     name: accumulator.name,
-    arguments: safeJsonParse(accumulator.inputJson)
+    arguments: safeJsonParse(accumulator.inputJson),
   }));
 }
 
@@ -189,7 +205,9 @@ export class AnthropicClient implements LLMClient {
     this.maxTokens = options.maxTokens ?? 1024;
   }
 
-  public async complete(request: ProviderCompletionRequest): Promise<ProviderCompletionResult> {
+  public async complete(
+    request: ProviderCompletionRequest,
+  ): Promise<ProviderCompletionResult> {
     const { system, messages } = toAnthropicMessages(request.messages);
 
     const response = await fetch(`${this.baseUrl}/messages`, {
@@ -198,17 +216,21 @@ export class AnthropicClient implements LLMClient {
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': this.apiKey,
-        'anthropic-version': '2023-06-01'
+        'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
         model: this.model,
         ...(system ? { system } : {}),
         messages,
-        ...(request.tools.length > 0 ? { tools: toAnthropicTools(request.tools) } : {}),
-        ...(this.temperature !== undefined ? { temperature: this.temperature } : {}),
+        ...(request.tools.length > 0
+          ? { tools: toAnthropicTools(request.tools) }
+          : {}),
+        ...(this.temperature !== undefined
+          ? { temperature: this.temperature }
+          : {}),
         max_tokens: this.maxTokens,
-        stream: true
-      })
+        stream: true,
+      }),
     });
 
     if (!response.ok) {
@@ -231,20 +253,26 @@ export class AnthropicClient implements LLMClient {
         index?: number;
       };
 
-      if (event === 'content_block_start' || payload.type === 'content_block_start') {
+      if (
+        event === 'content_block_start' ||
+        payload.type === 'content_block_start'
+      ) {
         const block = payload.content_block;
         if (block?.type === 'tool_use') {
           const accumulator = {
             id: block.id ?? `tool-${activeBlocks.size}`,
             name: block.name ?? 'unknown-tool',
-            inputJson: ''
+            inputJson: '',
           };
           activeBlocks.set(payload.index ?? activeBlocks.size, accumulator);
         }
         return;
       }
 
-      if (event === 'content_block_delta' || payload.type === 'content_block_delta') {
+      if (
+        event === 'content_block_delta' ||
+        payload.type === 'content_block_delta'
+      ) {
         const delta = payload.delta;
         if (!delta) {
           return;
@@ -255,7 +283,10 @@ export class AnthropicClient implements LLMClient {
           request.onToken?.(delta.text);
         }
 
-        if (delta.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
+        if (
+          delta.type === 'input_json_delta' &&
+          typeof delta.partial_json === 'string'
+        ) {
           const accumulator = activeBlocks.get(payload.index ?? 0);
           if (accumulator) {
             accumulator.inputJson += delta.partial_json;
@@ -265,7 +296,10 @@ export class AnthropicClient implements LLMClient {
         return;
       }
 
-      if (event === 'content_block_stop' || payload.type === 'content_block_stop') {
+      if (
+        event === 'content_block_stop' ||
+        payload.type === 'content_block_stop'
+      ) {
         const accumulator = activeBlocks.get(payload.index ?? 0);
         if (accumulator) {
           toolCalls.push(accumulator);
@@ -279,10 +313,10 @@ export class AnthropicClient implements LLMClient {
       message: {
         role: 'assistant',
         content: text.trimEnd(),
-        ...(finalToolCalls.length > 0 ? { toolCalls: finalToolCalls } : {})
+        ...(finalToolCalls.length > 0 ? { toolCalls: finalToolCalls } : {}),
       },
       toolCalls: finalToolCalls,
-      raw: { text }
+      raw: { text },
     };
   }
 }

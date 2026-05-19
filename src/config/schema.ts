@@ -3,7 +3,14 @@ import type { AppConfig, ProviderKind } from '../core/types.js';
 import { DEFAULT_SYSTEM_PROMPT } from '../core/prompts.js';
 import { getDefaultProviderModel } from '../providers/catalog.js';
 
-export const providerKindSchema = z.enum(['openai', 'anthropic', 'xai', 'groq', 'mistral', 'openai-compatible']);
+export const providerKindSchema = z.enum([
+  'openai',
+  'anthropic',
+  'xai',
+  'groq',
+  'mistral',
+  'openai-compatible',
+]);
 
 export const mcpServerSchema = z.object({
   name: z.string().min(1),
@@ -14,7 +21,7 @@ export const mcpServerSchema = z.object({
   cwd: z.string().min(1).optional(),
   env: z.record(z.string()).optional(),
   headers: z.record(z.string()).optional(),
-  enabled: z.boolean().default(true)
+  enabled: z.boolean().default(true),
 });
 
 export const appConfigSchema = z.object({
@@ -23,32 +30,32 @@ export const appConfigSchema = z.object({
     model: z.string().min(1),
     baseUrl: z.string().url().optional(),
     temperature: z.number().min(0).max(2).optional(),
-    maxTokens: z.number().int().positive().optional()
+    maxTokens: z.number().int().positive().optional(),
   }),
   systemPrompt: z.string().trim().min(1).default(DEFAULT_SYSTEM_PROMPT),
   tools: z.object({
     native: z.array(z.string().min(1)),
-    mcpServers: z.array(mcpServerSchema)
+    mcpServers: z.array(mcpServerSchema),
   }),
   ui: z.object({
-    autoConnectMcp: z.boolean()
-  })
+    autoConnectMcp: z.boolean(),
+  }),
 }) as z.ZodType<AppConfig>;
 
 export function createDefaultConfig(): AppConfig {
   return {
     provider: {
       kind: 'openai',
-      model: 'gpt-4.1-mini'
+      model: 'gpt-4.1-mini',
     },
     systemPrompt: DEFAULT_SYSTEM_PROMPT,
     tools: {
       native: ['system.now', 'agent.config'],
-      mcpServers: []
+      mcpServers: [],
     },
     ui: {
-      autoConnectMcp: true
-    }
+      autoConnectMcp: true,
+    },
   };
 }
 

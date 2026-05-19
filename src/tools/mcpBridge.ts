@@ -7,7 +7,7 @@ import type {
   McpServerInspection,
   ToolExecutionContext,
   ToolResult,
-  ToolSpec
+  ToolSpec,
 } from '../core/types.js';
 
 interface McpSession {
@@ -43,13 +43,13 @@ function formatToolResult(result: unknown): ToolResult {
         ? raw.content.map((item) => stringifyToolContent(item)).join('\n')
         : stringifyToolContent(raw.content),
       isError: raw.isError ?? false,
-      raw: result
+      raw: result,
     };
   }
 
   return {
     content: stringifyToolContent(result),
-    raw: result
+    raw: result,
   };
 }
 
@@ -58,7 +58,7 @@ async function createSession(server: McpServerConfig): Promise<McpSession> {
 
   const client = new Client({
     name: 'nexus-agi',
-    version: '0.1.0'
+    version: '0.1.0',
   });
 
   let transport: StdioClientTransport | StreamableHTTPClientTransport;
@@ -67,7 +67,7 @@ async function createSession(server: McpServerConfig): Promise<McpSession> {
       command: server.command ?? 'node',
       args: server.args ?? [],
       ...(server.cwd ? { cwd: server.cwd } : {}),
-      ...(server.env ? { env: server.env } : {})
+      ...(server.env ? { env: server.env } : {}),
     });
   } else {
     if (!server.url) {
@@ -75,7 +75,7 @@ async function createSession(server: McpServerConfig): Promise<McpSession> {
     }
 
     transport = new StreamableHTTPClientTransport(new URL(server.url), {
-      ...(server.headers ? { requestInit: { headers: server.headers } } : {})
+      ...(server.headers ? { requestInit: { headers: server.headers } } : {}),
     });
   }
 
@@ -83,7 +83,9 @@ async function createSession(server: McpServerConfig): Promise<McpSession> {
   const tools: McpSession['tools'] = [];
 
   try {
-    await client.connect(transport as unknown as Parameters<typeof client.connect>[0]);
+    await client.connect(
+      transport as unknown as Parameters<typeof client.connect>[0],
+    );
 
     let cursor: string | undefined;
 
@@ -97,7 +99,7 @@ async function createSession(server: McpServerConfig): Promise<McpSession> {
           fullName,
           originalName: tool.name,
           description: tool.description,
-          inputSchema: tool.inputSchema as Record<string, unknown>
+          inputSchema: tool.inputSchema as Record<string, unknown>,
         });
       }
       cursor = page.nextCursor ?? undefined;
@@ -113,11 +115,13 @@ async function createSession(server: McpServerConfig): Promise<McpSession> {
     client,
     transport,
     toolNames,
-    tools
+    tools,
   };
 }
 
-export async function testMcpServerConnection(server: McpServerConfig): Promise<number> {
+export async function testMcpServerConnection(
+  server: McpServerConfig,
+): Promise<number> {
   const session = await createSession(server);
 
   try {
@@ -175,7 +179,7 @@ export class McpBridge {
           transport: server.transport,
           enabled: false,
           status: 'disabled',
-          tools: []
+          tools: [],
         });
         continue;
       }
@@ -187,8 +191,10 @@ export class McpBridge {
         for (const tool of session.tools) {
           specs.push({
             name: tool.fullName,
-            description: tool.description ?? `MCP tool from ${server.name}: ${tool.originalName}`,
-            inputSchema: tool.inputSchema
+            description:
+              tool.description ??
+              `MCP tool from ${server.name}: ${tool.originalName}`,
+            inputSchema: tool.inputSchema,
           });
         }
 
@@ -197,7 +203,7 @@ export class McpBridge {
           transport: server.transport,
           enabled: true,
           status: 'connected',
-          tools: session.tools.map((tool) => tool.originalName)
+          tools: session.tools.map((tool) => tool.originalName),
         });
       } catch (error) {
         inspectedServers.push({
@@ -206,7 +212,7 @@ export class McpBridge {
           enabled: true,
           status: 'error',
           tools: [],
-          error: error instanceof Error ? error.message : String(error)
+          error: error instanceof Error ? error.message : String(error),
         });
       }
     }
@@ -224,15 +230,21 @@ export class McpBridge {
     return {
       inspector: {
         mcpToolCount: specs.length,
-        servers: inspectedServers
+        servers: inspectedServers,
       },
-      specs
+      specs,
     };
   }
 
-  public async invoke(name: string, input: unknown, _context: ToolExecutionContext): Promise<ToolResult> {
+  public async invoke(
+    name: string,
+    input: unknown,
+    _context: ToolExecutionContext,
+  ): Promise<ToolResult> {
     void _context;
-    const session = [...this.sessions.values()].find((candidate) => candidate.toolNames.has(name));
+    const session = [...this.sessions.values()].find((candidate) =>
+      candidate.toolNames.has(name),
+    );
     if (!session) {
       throw new Error(`MCP tool not connected: ${name}`);
     }
@@ -244,7 +256,10 @@ export class McpBridge {
 
     const result = await session.client.callTool({
       name: originalName,
-      arguments: typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {}
+      arguments:
+        typeof input === 'object' && input !== null
+          ? (input as Record<string, unknown>)
+          : {},
     });
 
     return formatToolResult(result);

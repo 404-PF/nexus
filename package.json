@@ -8,6 +8,8 @@
   },
   "scripts": {
     "setup": "tsx src/config/setup-entry.ts",
+    "backup": "tsx src/config/setup-entry.ts --backup",
+    "restore": "tsx src/config/setup-entry.ts --restore",
     "dev": "node --watch --import tsx src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",

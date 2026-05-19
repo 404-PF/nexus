@@ -1,4 +1,10 @@
-export type ProviderKind = 'openai' | 'anthropic' | 'xai' | 'groq' | 'mistral' | 'openai-compatible';
+export type ProviderKind =
+  | 'openai'
+  | 'anthropic'
+  | 'xai'
+  | 'groq'
+  | 'mistral'
+  | 'openai-compatible';
 
 export interface ProviderSettings {
   kind: ProviderKind;

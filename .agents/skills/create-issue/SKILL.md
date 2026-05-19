@@ -1,6 +1,6 @@
 ---
 name: create-issue
-description: "Use when creating a GitHub issue draft or opening a new issue from a bug report, feature request, task, or follow-up."
+description: 'Use when creating a GitHub issue draft or opening a new issue from a bug report, feature request, task, or follow-up.'
 ---
 
 # Create Issue

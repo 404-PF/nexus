@@ -17,7 +17,7 @@ function debug(message: string): void {
 const toolCallSchema = z.object({
   id: z.string(),
   name: z.string(),
-  arguments: z.unknown()
+  arguments: z.unknown(),
 });
 
 const chatMessageSchema = z.object({
@@ -25,11 +25,11 @@ const chatMessageSchema = z.object({
   content: z.string(),
   name: z.string().optional(),
   toolCallId: z.string().optional(),
-  toolCalls: z.array(toolCallSchema).optional()
+  toolCalls: z.array(toolCallSchema).optional(),
 });
 
 const transcriptSchema = z.object({
-  messages: z.array(chatMessageSchema)
+  messages: z.array(chatMessageSchema),
 });
 
 export const transcriptPath = join(agentHomeDir, 'history.yaml');
@@ -40,11 +40,11 @@ const archiveIndexEntrySchema = z.object({
   id: z.string(),
   messageCount: z.number(),
   preview: z.string(),
-  updatedAt: z.string()
+  updatedAt: z.string(),
 });
 
 const archiveIndexSchema = z.object({
-  entries: z.array(archiveIndexEntrySchema)
+  entries: z.array(archiveIndexEntrySchema),
 });
 
 type ArchiveSummary = {
@@ -63,21 +63,25 @@ async function ensureTranscriptArchiveDir(): Promise<void> {
   await mkdir(transcriptArchiveDir, { recursive: true });
 }
 
-function mapTranscriptMessage(message: z.infer<typeof chatMessageSchema>): ChatMessage {
+function mapTranscriptMessage(
+  message: z.infer<typeof chatMessageSchema>,
+): ChatMessage {
   return {
     role: message.role,
     content: message.content,
     ...(message.name !== undefined ? { name: message.name } : {}),
-    ...(message.toolCallId !== undefined ? { toolCallId: message.toolCallId } : {}),
+    ...(message.toolCallId !== undefined
+      ? { toolCallId: message.toolCallId }
+      : {}),
     ...(message.toolCalls !== undefined
       ? {
           toolCalls: message.toolCalls.map((toolCall) => ({
             id: toolCall.id,
             name: toolCall.name,
-            arguments: toolCall.arguments
-          }))
+            arguments: toolCall.arguments,
+          })),
         }
-      : {})
+      : {}),
   };
 }
 
@@ -88,7 +92,9 @@ async function readTranscriptFile(path: string): Promise<ChatMessage[] | null> {
 }
 
 function summarizeTranscript(messages: ChatMessage[]): string {
-  const firstMeaningfulMessage = messages.find((message) => message.role !== 'system');
+  const firstMeaningfulMessage = messages.find(
+    (message) => message.role !== 'system',
+  );
   if (!firstMeaningfulMessage) {
     return 'Empty transcript';
   }
@@ -142,7 +148,9 @@ function formatTranscriptExport(messages: ChatMessage[]): string {
         lines.push(`- ${toolCall.name} (${toolCall.id})`);
         lines.push('  Arguments:');
 
-        const serializedArguments = stringifyToolArguments(toolCall.arguments).split('\n');
+        const serializedArguments = stringifyToolArguments(
+          toolCall.arguments,
+        ).split('\n');
         for (const line of serializedArguments) {
           lines.push(`    ${line}`);
         }
@@ -157,10 +165,15 @@ function formatTranscriptExport(messages: ChatMessage[]): string {
   return lines.join('\n');
 }
 
-export async function exportTranscript(messages: ChatMessage[], filePath: string): Promise<void> {
+export async function exportTranscript(
+  messages: ChatMessage[],
+  filePath: string,
+): Promise<void> {
   const outputPath = resolve(filePath);
   await mkdir(dirname(outputPath), { recursive: true });
-  await writeFile(outputPath, formatTranscriptExport(messages), { encoding: 'utf8' });
+  await writeFile(outputPath, formatTranscriptExport(messages), {
+    encoding: 'utf8',
+  });
 }
 
 function createArchiveFileName(): string {
@@ -179,7 +192,9 @@ async function statIfExists(path: string): Promise<string | undefined> {
   }
 }
 
-async function readArchiveSummaryFromFile(fileName: string): Promise<ArchiveSummary | null> {
+async function readArchiveSummaryFromFile(
+  fileName: string,
+): Promise<ArchiveSummary | null> {
   const filePath = join(transcriptArchiveDir, fileName);
 
   try {
@@ -189,19 +204,28 @@ async function readArchiveSummaryFromFile(fileName: string): Promise<ArchiveSumm
       id: fileName,
       messageCount: messages?.length ?? 0,
       preview: summarizeTranscript(messages ?? []),
-      updatedAt: fileStat.mtime.toISOString()
+      updatedAt: fileStat.mtime.toISOString(),
     };
   } catch (error) {
-    debug(`Failed to read archived transcript ${fileName}: ${error instanceof Error ? error.message : String(error)}`);
+    debug(
+      `Failed to read archived transcript ${fileName}: ${error instanceof Error ? error.message : String(error)}`,
+    );
     return null;
   }
 }
 
 async function listArchiveFiles(): Promise<string[]> {
   try {
-    const entries = await readdir(transcriptArchiveDir, { withFileTypes: true });
+    const entries = await readdir(transcriptArchiveDir, {
+      withFileTypes: true,
+    });
     return entries
-      .filter((entry) => entry.isFile() && entry.name.endsWith('.yaml') && entry.name !== '.index.yaml')
+      .filter(
+        (entry) =>
+          entry.isFile() &&
+          entry.name.endsWith('.yaml') &&
+          entry.name !== '.index.yaml',
+      )
       .map((entry) => entry.name);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
@@ -227,7 +251,11 @@ async function collectArchiveSummaries(): Promise<ArchiveSummary[]> {
 }
 
 async function rewriteArchiveIndex(entries: ArchiveSummary[]): Promise<void> {
-  await writeFile(transcriptArchiveIndex, YAML.stringify({ entries }, { indent: 2 }), { encoding: 'utf8' });
+  await writeFile(
+    transcriptArchiveIndex,
+    YAML.stringify({ entries }, { indent: 2 }),
+    { encoding: 'utf8' },
+  );
 }
 
 export async function loadTranscript(): Promise<ChatMessage[]> {
@@ -238,7 +266,9 @@ export async function loadTranscript(): Promise<ChatMessage[]> {
       return [];
     }
 
-    debug(`Failed to load current transcript: ${error instanceof Error ? error.message : String(error)}`);
+    debug(
+      `Failed to load current transcript: ${error instanceof Error ? error.message : String(error)}`,
+    );
     return [];
   }
 }
@@ -249,7 +279,9 @@ export async function saveTranscript(messages: ChatMessage[]): Promise<void> {
   await writeFile(transcriptPath, output, { encoding: 'utf8' });
 }
 
-export async function archiveTranscript(messages: ChatMessage[]): Promise<void> {
+export async function archiveTranscript(
+  messages: ChatMessage[],
+): Promise<void> {
   if (messages.length === 0) {
     return;
   }
@@ -257,37 +289,57 @@ export async function archiveTranscript(messages: ChatMessage[]): Promise<void> 
   await ensureTranscriptArchiveDir();
   const fileName = createArchiveFileName();
   const output = YAML.stringify({ messages }, { indent: 2 });
-  await writeFile(join(transcriptArchiveDir, fileName), output, { encoding: 'utf8' });
+  await writeFile(join(transcriptArchiveDir, fileName), output, {
+    encoding: 'utf8',
+  });
 
   const preview = summarizeTranscript(messages);
   const indexEntry = {
     id: fileName,
     messageCount: messages.length,
     preview,
-    updatedAt: new Date().toISOString()
+    updatedAt: new Date().toISOString(),
   };
 
   try {
     const raw = await readFile(transcriptArchiveIndex, 'utf8');
     const index = archiveIndexSchema.parse(YAML.parse(raw));
     index.entries.push(indexEntry);
-    await writeFile(transcriptArchiveIndex, YAML.stringify(index, { indent: 2 }), { encoding: 'utf8' });
+    await writeFile(
+      transcriptArchiveIndex,
+      YAML.stringify(index, { indent: 2 }),
+      { encoding: 'utf8' },
+    );
   } catch (error) {
-    debug(`Failed to update archive index incrementally: ${error instanceof Error ? error.message : String(error)}`);
+    debug(
+      `Failed to update archive index incrementally: ${error instanceof Error ? error.message : String(error)}`,
+    );
     const summaries = await collectArchiveSummaries();
-    const mergedSummaries = [...summaries.filter((entry) => entry.id !== indexEntry.id), indexEntry];
+    const mergedSummaries = [
+      ...summaries.filter((entry) => entry.id !== indexEntry.id),
+      indexEntry,
+    ];
     await rewriteArchiveIndex(mergedSummaries);
   }
 }
 
-export async function loadArchivedSummaries(): Promise<Array<{ id: string; messageCount: number; preview: string; updatedAt: string }>> {
+export async function loadArchivedSummaries(): Promise<
+  Array<{
+    id: string;
+    messageCount: number;
+    preview: string;
+    updatedAt: string;
+  }>
+> {
   await ensureTranscriptArchiveDir();
 
   const archiveFiles = await listArchiveFiles();
   try {
     const raw = await readFile(transcriptArchiveIndex, 'utf8');
     const index = archiveIndexSchema.parse(YAML.parse(raw));
-    const indexedEntries = new Map(index.entries.map((entry) => [entry.id, entry] as const));
+    const indexedEntries = new Map(
+      index.entries.map((entry) => [entry.id, entry] as const),
+    );
     const summaries: ArchiveSummary[] = [];
 
     for (const fileName of archiveFiles) {
@@ -305,7 +357,9 @@ export async function loadArchivedSummaries(): Promise<Array<{ id: string; messa
 
     return summaries;
   } catch (error) {
-    debug(`Failed to load archive index: ${error instanceof Error ? error.message : String(error)}`);
+    debug(
+      `Failed to load archive index: ${error instanceof Error ? error.message : String(error)}`,
+    );
     return collectArchiveSummaries();
   }
 }
@@ -326,7 +380,9 @@ export async function loadTranscriptById(id: string): Promise<ChatMessage[]> {
     const messages = await readTranscriptFile(resolvedPath);
     return messages ?? [];
   } catch (error) {
-    throw new Error(`Failed to read transcript "${id}": ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(
+      `Failed to read transcript "${id}": ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 }
 
@@ -348,23 +404,29 @@ export async function listTranscripts(): Promise<
           label: 'Current conversation',
           messageCount: currentMessages.length,
           preview: summarizeTranscript(currentMessages),
-          updatedAt: (await statIfExists(transcriptPath)) ?? new Date(0).toISOString(),
-          isCurrent: true
-        }
+          updatedAt:
+            (await statIfExists(transcriptPath)) ?? new Date(0).toISOString(),
+          isCurrent: true,
+        },
       ]
     : [];
 
   const archiveTranscripts = await loadArchivedSummaries();
   const archivedSummaries = archiveTranscripts.map((transcript) => ({
     id: transcript.id,
-    label: transcript.preview.length > 48 ? `${transcript.preview.slice(0, 45)}...` : transcript.preview,
+    label:
+      transcript.preview.length > 48
+        ? `${transcript.preview.slice(0, 45)}...`
+        : transcript.preview,
     messageCount: transcript.messageCount,
     preview: transcript.preview,
     updatedAt: transcript.updatedAt,
-    isCurrent: false
+    isCurrent: false,
   }));
 
-  return [...currentTranscript, ...archivedSummaries].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  return [...currentTranscript, ...archivedSummaries].sort((left, right) =>
+    right.updatedAt.localeCompare(left.updatedAt),
+  );
 }
 
 export async function clearTranscript(): Promise<void> {

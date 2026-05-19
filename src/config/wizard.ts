@@ -5,17 +5,29 @@ import {
   multiselect,
   password,
   select,
-  text
+  text,
 } from '@clack/prompts';
-import type { AppConfig, McpServerConfig, ProviderKind } from '../core/types.js';
+import type {
+  AppConfig,
+  McpServerConfig,
+  ProviderKind,
+} from '../core/types.js';
 import { createDefaultConfig, getDefaultModel } from './schema.js';
 import { saveConfig } from './persistence.js';
-import { resolveProviderSecret, storeProviderApiKey } from '../providers/auth.js';
-import { builtInProviderKinds, getProviderDefinition } from '../providers/catalog.js';
+import {
+  resolveProviderSecret,
+  storeProviderApiKey,
+} from '../providers/auth.js';
+import {
+  builtInProviderKinds,
+  getProviderDefinition,
+} from '../providers/catalog.js';
 import { nativeToolCatalog } from '../tools/nativeTools.js';
 import { testMcpServerConnection } from '../tools/mcpBridge.js';
 
-function parseJsonArrayOfStrings(value: string): { value: string[] } | { error: string } {
+function parseJsonArrayOfStrings(
+  value: string,
+): { value: string[] } | { error: string } {
   const trimmed = value.trim();
   if (!trimmed) {
     return { value: [] };
@@ -23,7 +35,10 @@ function parseJsonArrayOfStrings(value: string): { value: string[] } | { error: 
 
   try {
     const parsed = JSON.parse(trimmed) as unknown;
-    if (Array.isArray(parsed) && parsed.every((item) => typeof item === 'string')) {
+    if (
+      Array.isArray(parsed) &&
+      parsed.every((item) => typeof item === 'string')
+    ) {
       return { value: parsed };
     }
   } catch {
@@ -33,7 +48,10 @@ function parseJsonArrayOfStrings(value: string): { value: string[] } | { error: 
   return { error: 'Command args must be a JSON array of strings.' };
 }
 
-function parseJsonRecordOfStrings(value: string, label: string): { value: Record<string, string> } | { error: string } {
+function parseJsonRecordOfStrings(
+  value: string,
+  label: string,
+): { value: Record<string, string> } | { error: string } {
   const trimmed = value.trim();
   if (!trimmed) {
     return { value: {} };
@@ -48,7 +66,9 @@ function parseJsonRecordOfStrings(value: string, label: string): { value: Record
       }
     }
   } catch {
-    return { error: `${label} must be valid JSON, like {"Authorization":"Bearer ..."}.` };
+    return {
+      error: `${label} must be valid JSON, like {"Authorization":"Bearer ..."}.`,
+    };
   }
 
   return { error: `${label} must be a JSON object with string values.` };
@@ -68,7 +88,9 @@ function numberOrUndefined(value: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : Number.NaN;
 }
 
-function normalizeHttpUrl(value: string): { value: string } | { error: string } {
+function normalizeHttpUrl(
+  value: string,
+): { value: string } | { error: string } {
   const trimmed = value.trim();
   if (!trimmed) {
     return { error: 'HTTP MCP endpoint URL is required.' };
@@ -77,7 +99,9 @@ function normalizeHttpUrl(value: string): { value: string } | { error: string } 
   try {
     const parsed = new URL(trimmed);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      return { error: 'HTTP MCP endpoint URL must start with http:// or https://.' };
+      return {
+        error: 'HTTP MCP endpoint URL must start with http:// or https://.',
+      };
     }
 
     return { value: trimmed };
@@ -86,12 +110,16 @@ function normalizeHttpUrl(value: string): { value: string } | { error: string } 
   }
 }
 
-async function promptJsonArray(message: string, placeholder: string, initialValue: string): Promise<string[] | null> {
+async function promptJsonArray(
+  message: string,
+  placeholder: string,
+  initialValue: string,
+): Promise<string[] | null> {
   while (true) {
     const input = await text({
       message,
       placeholder,
-      initialValue
+      initialValue,
     });
 
     if (isCancel(input)) {
@@ -111,13 +139,13 @@ async function promptJsonRecord(
   message: string,
   placeholder: string,
   initialValue: string,
-  label: string
+  label: string,
 ): Promise<Record<string, string> | null> {
   while (true) {
     const input = await text({
       message,
       placeholder,
-      initialValue
+      initialValue,
     });
 
     if (isCancel(input)) {
@@ -133,11 +161,13 @@ async function promptJsonRecord(
   }
 }
 
-async function promptMcpServer(existingServer?: McpServerConfig): Promise<McpServerConfig | null> {
+async function promptMcpServer(
+  existingServer?: McpServerConfig,
+): Promise<McpServerConfig | null> {
   const name = await text({
     message: 'MCP server name',
     placeholder: 'filesystem',
-    initialValue: existingServer?.name ?? ''
+    initialValue: existingServer?.name ?? '',
   });
 
   if (isCancel(name)) {
@@ -154,9 +184,9 @@ async function promptMcpServer(existingServer?: McpServerConfig): Promise<McpSer
     message: `Transport for ${trimmedName}`,
     options: [
       { label: 'stdio', value: 'stdio' },
-      { label: 'http', value: 'http' }
+      { label: 'http', value: 'http' },
     ],
-    initialValue: existingServer?.transport ?? 'stdio'
+    initialValue: existingServer?.transport ?? 'stdio',
   });
 
   if (isCancel(transport)) {
@@ -169,7 +199,7 @@ async function promptMcpServer(existingServer?: McpServerConfig): Promise<McpSer
       const command = await text({
         message: 'Command to start the server',
         placeholder: 'node',
-        initialValue: existingServer?.command ?? ''
+        initialValue: existingServer?.command ?? '',
       });
 
       if (isCancel(command)) {
@@ -184,7 +214,11 @@ async function promptMcpServer(existingServer?: McpServerConfig): Promise<McpSer
       console.log('stdio transport requires a command to start the server.');
     }
 
-    const args = await promptJsonArray('Command args as JSON array', '["server.js"]', jsonOrEmpty(existingServer?.args ?? []));
+    const args = await promptJsonArray(
+      'Command args as JSON array',
+      '["server.js"]',
+      jsonOrEmpty(existingServer?.args ?? []),
+    );
     if (args === null) {
       return null;
     }
@@ -192,7 +226,7 @@ async function promptMcpServer(existingServer?: McpServerConfig): Promise<McpSer
     const cwd = await text({
       message: 'Optional working directory',
       placeholder: 'C:/path/to/server',
-      initialValue: existingServer?.cwd ?? ''
+      initialValue: existingServer?.cwd ?? '',
     });
 
     if (isCancel(cwd)) {
@@ -203,7 +237,7 @@ async function promptMcpServer(existingServer?: McpServerConfig): Promise<McpSer
       'Optional environment JSON object',
       '{"DEBUG":"1"}',
       jsonOrEmpty(existingServer?.env),
-      'Environment JSON'
+      'Environment JSON',
     );
 
     if (env === null) {
@@ -217,12 +251,12 @@ async function promptMcpServer(existingServer?: McpServerConfig): Promise<McpSer
       args,
       ...(cwd.trim() ? { cwd: cwd.trim() } : {}),
       ...(Object.keys(env).length ? { env } : {}),
-      enabled: existingServer?.enabled ?? true
+      enabled: existingServer?.enabled ?? true,
     };
 
     const shouldTest = await confirm({
       message: 'Test this MCP server connection now?',
-      initialValue: true
+      initialValue: true,
     });
 
     if (isCancel(shouldTest)) {
@@ -232,10 +266,12 @@ async function promptMcpServer(existingServer?: McpServerConfig): Promise<McpSer
     if (shouldTest) {
       try {
         const toolCount = await testMcpServerConnection(server);
-        console.log(`MCP server test passed: ${server.name} connected and exposed ${toolCount} tool(s).`);
+        console.log(
+          `MCP server test passed: ${server.name} connected and exposed ${toolCount} tool(s).`,
+        );
       } catch (error) {
         console.log(
-          `MCP server test failed for ${server.name} [stdio]: ${error instanceof Error ? error.message : String(error)}`
+          `MCP server test failed for ${server.name} [stdio]: ${error instanceof Error ? error.message : String(error)}`,
         );
 
         const nextAction = await select({
@@ -243,9 +279,9 @@ async function promptMcpServer(existingServer?: McpServerConfig): Promise<McpSer
           options: [
             { label: 'Edit this server', value: 'edit' },
             { label: 'Save anyway', value: 'save' },
-            { label: 'Cancel setup', value: 'cancel' }
+            { label: 'Cancel setup', value: 'cancel' },
           ],
-          initialValue: 'edit'
+          initialValue: 'edit',
         });
 
         if (isCancel(nextAction) || nextAction === 'cancel') {
@@ -264,7 +300,7 @@ async function promptMcpServer(existingServer?: McpServerConfig): Promise<McpSer
   const url = await text({
     message: 'HTTP MCP endpoint URL',
     placeholder: 'http://localhost:3000/mcp',
-    initialValue: existingServer?.url ?? ''
+    initialValue: existingServer?.url ?? '',
   });
 
   if (isCancel(url)) {
@@ -278,7 +314,7 @@ async function promptMcpServer(existingServer?: McpServerConfig): Promise<McpSer
     const retryUrl = await text({
       message: 'HTTP MCP endpoint URL',
       placeholder: 'http://localhost:3000/mcp',
-      initialValue: existingServer?.url ?? ''
+      initialValue: existingServer?.url ?? '',
     });
 
     if (isCancel(retryUrl)) {
@@ -292,7 +328,7 @@ async function promptMcpServer(existingServer?: McpServerConfig): Promise<McpSer
     'Optional request headers JSON object',
     '{"Authorization":"Bearer ..."}',
     jsonOrEmpty(existingServer?.headers),
-    'Request headers JSON'
+    'Request headers JSON',
   );
 
   if (headers === null) {
@@ -304,12 +340,12 @@ async function promptMcpServer(existingServer?: McpServerConfig): Promise<McpSer
     transport,
     url: normalizedUrl.value,
     ...(Object.keys(headers).length ? { headers } : {}),
-    enabled: existingServer?.enabled ?? true
+    enabled: existingServer?.enabled ?? true,
   };
 
   const shouldTest = await confirm({
     message: 'Test this MCP server connection now?',
-    initialValue: true
+    initialValue: true,
   });
 
   if (isCancel(shouldTest)) {
@@ -319,10 +355,12 @@ async function promptMcpServer(existingServer?: McpServerConfig): Promise<McpSer
   if (shouldTest) {
     try {
       const toolCount = await testMcpServerConnection(server);
-      console.log(`MCP server test passed: ${server.name} connected and exposed ${toolCount} tool(s).`);
+      console.log(
+        `MCP server test passed: ${server.name} connected and exposed ${toolCount} tool(s).`,
+      );
     } catch (error) {
       console.log(
-        `MCP server test failed for ${server.name} [http]: ${error instanceof Error ? error.message : String(error)}`
+        `MCP server test failed for ${server.name} [http]: ${error instanceof Error ? error.message : String(error)}`,
       );
 
       const nextAction = await select({
@@ -330,9 +368,9 @@ async function promptMcpServer(existingServer?: McpServerConfig): Promise<McpSer
         options: [
           { label: 'Edit this server', value: 'edit' },
           { label: 'Save anyway', value: 'save' },
-          { label: 'Cancel setup', value: 'cancel' }
+          { label: 'Cancel setup', value: 'cancel' },
         ],
-        initialValue: 'edit'
+        initialValue: 'edit',
       });
 
       if (isCancel(nextAction) || nextAction === 'cancel') {
@@ -348,7 +386,9 @@ async function promptMcpServer(existingServer?: McpServerConfig): Promise<McpSer
   return server;
 }
 
-async function promptMcpServers(existingServers: McpServerConfig[]): Promise<McpServerConfig[] | null> {
+async function promptMcpServers(
+  existingServers: McpServerConfig[],
+): Promise<McpServerConfig[] | null> {
   const nextServers: McpServerConfig[] = [];
 
   for (const server of existingServers) {
@@ -357,9 +397,9 @@ async function promptMcpServers(existingServers: McpServerConfig[]): Promise<Mcp
       options: [
         { label: 'Keep', value: 'keep' },
         { label: 'Edit', value: 'edit' },
-        { label: 'Remove', value: 'remove' }
+        { label: 'Remove', value: 'remove' },
       ],
-      initialValue: 'keep'
+      initialValue: 'keep',
     });
 
     if (isCancel(action)) {
@@ -405,7 +445,7 @@ async function promptMcpServers(existingServers: McpServerConfig[]): Promise<Mcp
 
 async function promptProviderSettings(
   defaults: AppConfig,
-  options: { includeAdvancedSettings: boolean }
+  options: { includeAdvancedSettings: boolean },
 ): Promise<{
   provider: ProviderKind;
   model: string;
@@ -418,11 +458,11 @@ async function promptProviderSettings(
     options: [
       ...builtInProviderKinds.map((kind) => ({
         label: getProviderDefinition(kind).label,
-        value: kind
+        value: kind,
       })),
-      { label: 'OpenAI-compatible endpoint', value: 'openai-compatible' }
+      { label: 'OpenAI-compatible endpoint', value: 'openai-compatible' },
     ],
-    initialValue: defaults.provider.kind
+    initialValue: defaults.provider.kind,
   });
 
   if (isCancel(provider)) {
@@ -435,7 +475,7 @@ async function promptProviderSettings(
     initialValue:
       provider === defaults.provider.kind
         ? defaults.provider.model
-        : getDefaultModel(provider as ProviderKind)
+        : getDefaultModel(provider as ProviderKind),
   });
 
   if (isCancel(model)) {
@@ -448,7 +488,10 @@ async function promptProviderSettings(
     const compatibleBaseUrl = await text({
       message: 'Base URL for the compatible endpoint',
       placeholder: 'https://example.com/v1',
-      initialValue: defaults.provider.kind === 'openai-compatible' ? defaults.provider.baseUrl ?? '' : ''
+      initialValue:
+        defaults.provider.kind === 'openai-compatible'
+          ? (defaults.provider.baseUrl ?? '')
+          : '',
     });
 
     if (isCancel(compatibleBaseUrl)) {
@@ -463,7 +506,7 @@ async function promptProviderSettings(
     return {
       provider: provider as ProviderKind,
       model,
-      ...(baseUrl ? { baseUrl } : {})
+      ...(baseUrl ? { baseUrl } : {}),
     };
   }
 
@@ -472,7 +515,7 @@ async function promptProviderSettings(
     const temperatureInput = await text({
       message: 'Temperature (optional)',
       placeholder: '0.7',
-      initialValue: defaults.provider.temperature?.toString() ?? ''
+      initialValue: defaults.provider.temperature?.toString() ?? '',
     });
 
     if (isCancel(temperatureInput)) {
@@ -486,8 +529,14 @@ async function promptProviderSettings(
       break;
     }
 
-    if (Number.isNaN(parsedTemperature) || parsedTemperature < 0 || parsedTemperature > 2) {
-      console.log('Temperature must be a number between 0 and 2, or blank to keep the current value.');
+    if (
+      Number.isNaN(parsedTemperature) ||
+      parsedTemperature < 0 ||
+      parsedTemperature > 2
+    ) {
+      console.log(
+        'Temperature must be a number between 0 and 2, or blank to keep the current value.',
+      );
       continue;
     }
 
@@ -500,7 +549,7 @@ async function promptProviderSettings(
     const maxTokensInput = await text({
       message: 'Max tokens (optional)',
       placeholder: '1024',
-      initialValue: defaults.provider.maxTokens?.toString() ?? ''
+      initialValue: defaults.provider.maxTokens?.toString() ?? '',
     });
 
     if (isCancel(maxTokensInput)) {
@@ -515,7 +564,9 @@ async function promptProviderSettings(
     }
 
     if (!Number.isInteger(parsedMaxTokens) || parsedMaxTokens <= 0) {
-      console.log('Max tokens must be a positive whole number, or blank to keep the current value.');
+      console.log(
+        'Max tokens must be a positive whole number, or blank to keep the current value.',
+      );
       continue;
     }
 
@@ -528,7 +579,7 @@ async function promptProviderSettings(
     model,
     ...(baseUrl ? { baseUrl } : {}),
     ...(temperature !== undefined ? { temperature } : {}),
-    ...(maxTokens !== undefined ? { maxTokens } : {})
+    ...(maxTokens !== undefined ? { maxTokens } : {}),
   };
 }
 
@@ -536,7 +587,7 @@ async function promptProviderApiKey(provider: ProviderKind): Promise<void> {
   const currentSecret = await resolveProviderSecret(provider);
   const saveApiKey = await confirm({
     message: 'Store an API key now?',
-    initialValue: Boolean(currentSecret)
+    initialValue: Boolean(currentSecret),
   });
 
   if (isCancel(saveApiKey)) {
@@ -549,7 +600,7 @@ async function promptProviderApiKey(provider: ProviderKind): Promise<void> {
   }
 
   const apiKey = await password({
-    message: 'API key'
+    message: 'API key',
   });
 
   if (isCancel(apiKey)) {
@@ -566,7 +617,13 @@ async function hasProviderSecret(provider: ProviderKind): Promise<boolean> {
 
 function applyProviderSelection(
   defaults: AppConfig,
-  selection: { provider: ProviderKind; model: string; baseUrl?: string; temperature?: number; maxTokens?: number }
+  selection: {
+    provider: ProviderKind;
+    model: string;
+    baseUrl?: string;
+    temperature?: number;
+    maxTokens?: number;
+  },
 ): AppConfig {
   return {
     ...defaults,
@@ -583,17 +640,21 @@ function applyProviderSelection(
         ? { maxTokens: selection.maxTokens }
         : defaults.provider.maxTokens !== undefined
           ? { maxTokens: defaults.provider.maxTokens }
-          : {})
-    }
+          : {}),
+    },
   };
 }
 
-export async function runConfigWizard(seedConfig?: AppConfig): Promise<AppConfig> {
+export async function runConfigWizard(
+  seedConfig?: AppConfig,
+): Promise<AppConfig> {
   const defaults = seedConfig ?? createDefaultConfig();
 
   console.clear();
 
-  const providerSelection = await promptProviderSettings(defaults, { includeAdvancedSettings: true });
+  const providerSelection = await promptProviderSettings(defaults, {
+    includeAdvancedSettings: true,
+  });
   if (!providerSelection) {
     cancel('Setup cancelled');
     process.exit(0);
@@ -601,7 +662,7 @@ export async function runConfigWizard(seedConfig?: AppConfig): Promise<AppConfig
 
   const systemPrompt = await text({
     message: 'System prompt',
-    initialValue: defaults.systemPrompt
+    initialValue: defaults.systemPrompt,
   });
 
   if (isCancel(systemPrompt)) {
@@ -612,16 +673,18 @@ export async function runConfigWizard(seedConfig?: AppConfig): Promise<AppConfig
   const nextSystemPrompt = systemPrompt.trim() || defaults.systemPrompt;
   await promptProviderApiKey(providerSelection.provider);
 
-  const availableNativeTools = Object.entries(nativeToolCatalog).map(([name, tool]) => ({
-    value: name,
-    label: `${name} - ${tool.spec.description}`
-  }));
+  const availableNativeTools = Object.entries(nativeToolCatalog).map(
+    ([name, tool]) => ({
+      value: name,
+      label: `${name} - ${tool.spec.description}`,
+    }),
+  );
 
   const nativeTools = await multiselect({
     message: 'Select native tools to enable',
     options: availableNativeTools,
     required: false,
-    initialValues: defaults.tools.native
+    initialValues: defaults.tools.native,
   });
 
   if (isCancel(nativeTools)) {
@@ -640,11 +703,11 @@ export async function runConfigWizard(seedConfig?: AppConfig): Promise<AppConfig
     systemPrompt: nextSystemPrompt,
     tools: {
       native: nativeTools as string[],
-      mcpServers
+      mcpServers,
     },
     ui: {
-      autoConnectMcp: defaults.ui.autoConnectMcp
-    }
+      autoConnectMcp: defaults.ui.autoConnectMcp,
+    },
   };
 
   await saveConfig(config);
@@ -653,12 +716,16 @@ export async function runConfigWizard(seedConfig?: AppConfig): Promise<AppConfig
   return config;
 }
 
-export async function runProviderSwitcher(seedConfig?: AppConfig): Promise<AppConfig> {
+export async function runProviderSwitcher(
+  seedConfig?: AppConfig,
+): Promise<AppConfig> {
   const defaults = seedConfig ?? createDefaultConfig();
 
   console.clear();
 
-  const providerSelection = await promptProviderSettings(defaults, { includeAdvancedSettings: false });
+  const providerSelection = await promptProviderSettings(defaults, {
+    includeAdvancedSettings: false,
+  });
   if (!providerSelection) {
     cancel('Setup cancelled');
     process.exit(0);
@@ -666,7 +733,9 @@ export async function runProviderSwitcher(seedConfig?: AppConfig): Promise<AppCo
 
   await promptProviderApiKey(providerSelection.provider);
   if (!(await hasProviderSecret(providerSelection.provider))) {
-    cancel(`No API key available for ${getProviderDefinition(providerSelection.provider).label}`);
+    cancel(
+      `No API key available for ${getProviderDefinition(providerSelection.provider).label}`,
+    );
     process.exit(1);
   }
 

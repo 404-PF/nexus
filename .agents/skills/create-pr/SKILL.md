@@ -1,6 +1,6 @@
 ---
 name: create-pr
-description: "Use when creating a GitHub pull request draft or opening a new PR from a completed change, bug fix, feature, or follow-up."
+description: 'Use when creating a GitHub pull request draft or opening a new PR from a completed change, bug fix, feature, or follow-up.'
 ---
 
 # Create Pull Request

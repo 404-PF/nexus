@@ -5,7 +5,7 @@ import prettier from 'eslint-config-prettier';
 
 export default tseslint.config(
   {
-    ignores: ['dist/**', 'node_modules/**']
+    ignores: ['dist/**', 'node_modules/**'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
@@ -15,11 +15,11 @@ export default tseslint.config(
     languageOptions: {
       globals: {
         ...globals.es2023,
-        ...globals.node
-      }
+        ...globals.node,
+      },
     },
     rules: {
-      '@typescript-eslint/consistent-type-imports': 'error'
-    }
-  }
+      '@typescript-eslint/consistent-type-imports': 'error',
+    },
+  },
 );
