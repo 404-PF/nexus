@@ -525,6 +525,7 @@ export async function createTuiSession(config: AppConfig): Promise<TuiSession> {
     }
 
     currentTitle = trimmedTitle;
+    titleGenerated = true;
     state.setTitle(trimmedTitle);
     await waitForTranscriptWrites();
     state.markIdle(`Conversation renamed to "${trimmedTitle}"`);
